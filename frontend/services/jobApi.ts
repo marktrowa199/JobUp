@@ -1,0 +1,89 @@
+export type JobSearchFilters = {
+  pay: string;
+  jobType: string;
+  remote: string;
+  classification: string;
+  listingTime: string;
+};
+
+export type JobApiItem = {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  description?: string;
+  salary?: string;
+  jobType?: string;
+  source: string;
+  url: string;
+  postedDate?: string;
+};
+
+export type JobSearchResponse = {
+  keyword: string;
+  location: string;
+  page: number;
+  limit: number;
+  total: number;
+  jobs: JobApiItem[];
+};
+
+export type JobDetailsResponse = {
+  id: string;
+  title: string;
+  company: {
+    name: string;
+    description: string | null;
+    website: string | null;
+    industry: string | null;
+  };
+  location: string;
+  description: string;
+  salary: string;
+  job_type: string;
+  remote: string;
+  posted_date: string;
+  source: string;
+  url: string;
+};
+
+export async function searchJobsApi(params: {
+  keyword: string;
+  location: string;
+}): Promise<JobSearchResponse> {
+  const response = await fetch("/api/jobs/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keywords: params.keyword, location: params.location }),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(payload?.message ?? "We couldn't load job listings right now.");
+  }
+
+  const payload = (await response.json()) as { jobs: JobApiItem[] };
+  return {
+    keyword: params.keyword,
+    location: params.location,
+    page: 1,
+    limit: payload.jobs.length,
+    total: payload.jobs.length,
+    jobs: payload.jobs,
+  };
+}
+
+export async function getJob(jobId: string): Promise<JobDetailsResponse> {
+  const response = await fetch(`http://127.0.0.1:8000/api/jobs/${encodeURIComponent(jobId)}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error("We couldn't load this job right now. Please try again in a moment.");
+  }
+
+  return response.json();
+}
