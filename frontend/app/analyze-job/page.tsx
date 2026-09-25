@@ -73,7 +73,7 @@ export default function AnalyzeJobPage() {
       <div className="mx-auto max-w-6xl px-6 py-16">
         <div className="mb-8">
           <a
-            href="/"
+            href="/workspace"
             className="inline-flex items-center rounded-full border border-cyan-400/40 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/20"
           >
             ← Back to JobUp

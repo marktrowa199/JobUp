@@ -78,7 +78,7 @@ export default function JobDetailsPage() {
           </p>
           <button
             type="button"
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/workspace")}
             className="mt-6 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
           >
             Back to Search
@@ -95,7 +95,7 @@ export default function JobDetailsPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl">
-        <Link href="/" className="text-sm font-semibold text-indigo-600 hover:text-indigo-500">
+        <Link href="/workspace" className="text-sm font-semibold text-indigo-600 hover:text-indigo-500">
           ← Back to Search
         </Link>
 
