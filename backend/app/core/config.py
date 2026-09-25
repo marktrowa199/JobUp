@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     job_api_app_id: str = Field(default="")
     job_api_base_url: str = Field(default="")
     job_api_provider: str = Field(default="adzuna")
+    session_cookie_name: str = Field(default="jobup_session")
+    session_expiry_days: int = Field(default=7, ge=1, le=30)
+    email_host: str = Field(default="")
+    email_port: int = Field(default=587, ge=1, le=65535)
+    email_username: str = Field(default="")
+    email_password: str = Field(default="")
+    email_from: str = Field(default="")
+    email_use_tls: bool = Field(default=True)
 
     model_config = {
         "env_file": ".env",

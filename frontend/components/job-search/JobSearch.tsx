@@ -14,6 +14,7 @@ import { SearchFilters } from "@/components/job-search/SearchFilters";
 import { RecommendedJobs } from "@/components/jobs/RecommendedJobs";
 import { RecentSearches } from "@/components/jobs/RecentSearches";
 import { searchJobsApi } from "@/services/jobApi";
+import { useNotifications } from "@/components/notifications/NotificationProvider";
 
 type JobSearchProps = {
   onSearch?: (jobs: Job[]) => void;
@@ -30,6 +31,7 @@ export function JobSearch({ onSearch }: JobSearchProps) {
   const [results, setResults] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { notify } = useNotifications();
   const locationRef = useRef<HTMLDivElement | null>(null);
   const recentSearchesLoaded = useRef(false);
 
@@ -83,6 +85,7 @@ export function JobSearch({ onSearch }: JobSearchProps) {
   const handleSearch = async () => {
     setLoading(true);
     setError("");
+    notify("info", "Searching for jobs...");
 
     try {
       const response = await searchJobsApi({
@@ -107,8 +110,10 @@ export function JobSearch({ onSearch }: JobSearchProps) {
       } else if (nextResults.length === 0) {
         setError("No jobs found in the Philippines. Try another job title, keyword, or location.");
       }
+      notify("success", `${nextResults.length} job${nextResults.length === 1 ? "" : "s"} found.`);
     } catch (searchError) {
       setError(searchError instanceof Error ? searchError.message : "We couldn't load job listings right now.");
+      notify("error", "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -130,6 +135,7 @@ export function JobSearch({ onSearch }: JobSearchProps) {
 
     setLoading(true);
     setError("");
+    notify("info", "Searching for jobs...");
 
     try {
       const response = await searchJobsApi({
@@ -144,8 +150,10 @@ export function JobSearch({ onSearch }: JobSearchProps) {
       } else if (response.jobs.length === 0) {
         setError(`No jobs found for "${recent.job}" in "${recent.location}".`);
       }
+      notify("success", `${response.jobs.length} job${response.jobs.length === 1 ? "" : "s"} found.`);
     } catch (searchError) {
       setError(searchError instanceof Error ? searchError.message : "We couldn't load job listings right now.");
+      notify("error", "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
