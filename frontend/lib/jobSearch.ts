@@ -25,6 +25,8 @@ export type Job = {
 };
 
 export const locationOptions = [
+  "Philippines",
+  "Manila",
   "Cubao, Quezon City, Metro Manila",
   "Quezon City, Metro Manila",
   "Metro Manila",
@@ -35,6 +37,10 @@ export const locationOptions = [
   "Taguig City, Metro Manila",
   "Pasig City, Metro Manila",
   "Cebu City, Central Visayas",
+  "Cebu",
+  "Davao",
+  "Pampanga",
+  "Angeles City",
 ];
 
 export const recentSearches = [

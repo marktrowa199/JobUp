@@ -5,6 +5,7 @@ const navItems = [
   "People Search",
   "Career Advice",
   "Companies",
+  
 ];
 
 export function Navbar() {

@@ -26,6 +26,7 @@ export type JobSearchResponse = {
   limit: number;
   total: number;
   jobs: JobApiItem[];
+  locationBroadened: boolean;
 };
 
 export type JobDetailsResponse = {
@@ -50,11 +51,18 @@ export type JobDetailsResponse = {
 export async function searchJobsApi(params: {
   keyword: string;
   location: string;
+  jobType?: string;
+  remote?: string;
 }): Promise<JobSearchResponse> {
   const response = await fetch("/api/jobs/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ keywords: params.keyword, location: params.location }),
+    body: JSON.stringify({
+      keywords: params.keyword,
+      location: params.location,
+      jobType: params.jobType,
+      remote: params.remote,
+    }),
     cache: "no-store",
   });
 
@@ -63,14 +71,20 @@ export async function searchJobsApi(params: {
     throw new Error(payload?.message ?? "We couldn't load job listings right now.");
   }
 
-  const payload = (await response.json()) as { jobs: JobApiItem[] };
+  const payload = (await response.json()) as {
+    jobs: JobApiItem[];
+    keyword?: string;
+    location?: string;
+    locationBroadened?: boolean;
+  };
   return {
-    keyword: params.keyword,
-    location: params.location,
+    keyword: payload.keyword ?? params.keyword,
+    location: payload.location ?? params.location ?? "Philippines",
     page: 1,
     limit: payload.jobs.length,
     total: payload.jobs.length,
     jobs: payload.jobs,
+    locationBroadened: payload.locationBroadened ?? false,
   };
 }
 

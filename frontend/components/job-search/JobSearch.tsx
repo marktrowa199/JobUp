@@ -23,7 +23,7 @@ const RECENT_SEARCHES_KEY = "jobup-recent-searches";
 
 export function JobSearch({ onSearch }: JobSearchProps) {
   const [jobQuery, setJobQuery] = useState("Python Developer");
-  const [location, setLocation] = useState("Quezon City");
+  const [location, setLocation] = useState("");
   const [filters, setFilters] = useState<JobSearchFilters>(defaultFilters);
   const [savedSearches, setSavedSearches] = useState(recentSearches);
   const [isLocationOpen, setIsLocationOpen] = useState(false);
@@ -88,19 +88,24 @@ export function JobSearch({ onSearch }: JobSearchProps) {
       const response = await searchJobsApi({
         keyword: jobQuery,
         location,
+        jobType: filters.jobType,
+        remote: filters.remote,
       });
 
       const nextResults = response.jobs.map((job) => normalizeJobFromApi(job));
       setResults(nextResults);
+      setLocation(response.location);
       if (onSearch) {
         onSearch(nextResults);
       }
       setSavedSearches((current) => [
-        { job: jobQuery, location, type: filters.jobType },
-        ...current.filter((item) => item.job !== jobQuery || item.location !== location),
+        { job: jobQuery, location: response.location, type: filters.jobType },
+        ...current.filter((item) => item.job !== jobQuery || item.location !== response.location),
       ].slice(0, 5));
-      if (nextResults.length === 0) {
-        setError("No jobs found. We couldn't find jobs matching your search. Try another job title, keyword, or location.");
+      if (response.locationBroadened) {
+        setError(`No jobs were found in the requested city, so we broadened this search to the Philippines. Showing ${nextResults.length} result${nextResults.length === 1 ? "" : "s"}.`);
+      } else if (nextResults.length === 0) {
+        setError("No jobs found in the Philippines. Try another job title, keyword, or location.");
       }
     } catch (searchError) {
       setError(searchError instanceof Error ? searchError.message : "We couldn't load job listings right now.");
@@ -130,9 +135,13 @@ export function JobSearch({ onSearch }: JobSearchProps) {
       const response = await searchJobsApi({
         keyword: recent.job,
         location: recent.location,
+        jobType: recent.type,
       });
       setResults(response.jobs.map((job) => normalizeJobFromApi(job)));
-      if (response.jobs.length === 0) {
+      setLocation(response.location);
+      if (response.locationBroadened) {
+        setError(`No jobs were found in ${recent.location}, so we broadened this search to the Philippines.`);
+      } else if (response.jobs.length === 0) {
         setError(`No jobs found for "${recent.job}" in "${recent.location}".`);
       }
     } catch (searchError) {
