@@ -150,8 +150,9 @@ export async function POST(request: Request) {
   }
 
   if (!apiKey) {
+    console.error("JOOBLE_API_KEY is missing. Add it to frontend/.env.local and restart Next.js.");
     return NextResponse.json(
-      { message: "The Jooble job search provider is not configured. Add JOOBLE_API_KEY to frontend/.env.local." },
+      { message: "Live job search is temporarily unavailable. Please try again later." },
       { status: 503 },
     );
   }
