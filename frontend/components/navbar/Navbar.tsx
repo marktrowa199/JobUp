@@ -1,15 +1,25 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { UserProfile } from "@/components/profile/UserProfile";
 
 const navItems = [
-  "Job Search",
-  "People Search",
-  "Career Advice",
-  "Companies",
-  
+  { label: "Job Search", href: "/workspace" },
+  { label: "People Search", href: "/workspace/people" },
+  { label: "Career Advice", href: "/workspace/career-advice" },
+  { label: "Companies", href: "/workspace/companies" },
 ];
 
 export function Navbar() {
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const isCurrent = (href: string) => href === "/workspace"
+    ? pathname === href
+    : pathname.startsWith(href);
+
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur-sm">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-4 sm:px-6 lg:px-8">
@@ -23,23 +33,44 @@ export function Navbar() {
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex">
-          {navItems.map((item) => (
+          {navItems.map(({ label, href }) => (
             <Link
-              key={item}
-              href={item === "Job Search" ? "/workspace" : "#"}
-              className={
-                item === "Job Search"
-                  ? "border-b-2 border-indigo-600 pb-1 text-sm font-medium text-indigo-700"
-                  : "text-sm font-medium text-slate-600 transition hover:text-slate-900"
-              }
+              key={href}
+              href={href}
+              aria-current={isCurrent(href) ? "page" : undefined}
+              className={isCurrent(href)
+                ? "border-b-2 border-indigo-600 pb-1 text-sm font-semibold text-indigo-700"
+                : "text-sm font-medium text-slate-600 transition hover:text-slate-900"}
             >
-              {item}
+              {label}
             </Link>
           ))}
         </nav>
 
+        <button
+          type="button"
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 md:hidden"
+          aria-expanded={mobileOpen}
+          aria-controls="workspace-mobile-navigation"
+          onClick={() => setMobileOpen((open) => !open)}
+        >
+          {mobileOpen ? "Close" : "Menu"}
+        </button>
         <UserProfile />
       </div>
+      <nav id="workspace-mobile-navigation" className={`${mobileOpen ? "grid" : "hidden"} gap-1 border-t border-slate-100 px-4 py-3 md:hidden`}>
+        {navItems.map(({ label, href }) => (
+          <Link
+            key={href}
+            href={href}
+            aria-current={isCurrent(href) ? "page" : undefined}
+            onClick={() => setMobileOpen(false)}
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${isCurrent(href) ? "bg-indigo-50 text-indigo-700" : "text-slate-700 hover:bg-slate-50"}`}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
     </header>
   );
 }
