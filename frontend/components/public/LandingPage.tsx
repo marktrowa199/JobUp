@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicNavbar } from "@/components/public/PublicNavbar";
 import { HomepageCarousel } from "@/components/public/HomepageCarousel";
+import { LocationMap } from "@/components/public/LocationMap";
 
 const workflow = [
   {
@@ -98,6 +99,8 @@ export function LandingPage() {
             </div>
           </div>
         </section>
+
+        <LocationMap />
 
         <section id="how-it-works" className="scroll-mt-8 border-b border-slate-200 bg-[#f7f9fc]">
           <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:px-10 lg:py-24">
