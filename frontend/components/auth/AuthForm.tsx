@@ -10,6 +10,63 @@ type AuthFormProps = {
   mode: "login" | "register";
 };
 
+type PasswordFieldProps = {
+  label: string;
+  value: string;
+  placeholder: string;
+  autoComplete: "new-password" | "current-password";
+  onChange: (value: string) => void;
+};
+
+function PasswordField({ label, value, placeholder, autoComplete, onChange }: PasswordFieldProps) {
+  const [isVisible, setIsVisible] = useState(false);
+  const inputId = label.toLowerCase().replace(/\s+/g, "-");
+
+  return (
+    <label htmlFor={inputId} className="block text-sm font-semibold text-slate-700">
+      {label}
+      <span className="relative mt-2 block">
+        <input
+          id={inputId}
+          type={isVisible ? "text" : "password"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          autoComplete={autoComplete}
+          placeholder={placeholder}
+          className="w-full rounded-xl border border-slate-200 px-4 py-3 pr-12 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+        />
+        <button
+          type="button"
+          onClick={() => setIsVisible((current) => !current)}
+          className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          aria-label={isVisible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+          title={isVisible ? "Hide password" : "Show password"}
+        >
+          {isVisible ? <EyeOffIcon /> : <EyeIcon />}
+        </button>
+      </span>
+    </label>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.5-6 9.75-6 9.75 6 9.75 6-3.5 6-9.75 6-9.75-6-9.75-6Z" />
+      <circle cx="12" cy="12" r="2.5" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m3 3 18 18M10.6 6.2A10.8 10.8 0 0 1 12 6c6.25 0 9.75 6 9.75 6a17.7 17.7 0 0 1-3.1 3.75M6.6 6.7C3.9 8.55 2.25 12 2.25 12s3.5 6 9.75 6c1.02 0 1.95-.16 2.8-.43" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.88 9.88a3 3 0 0 0 4.24 4.24" />
+    </svg>
+  );
+}
+
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
   const { refresh } = useAuth();
@@ -96,15 +153,21 @@ export function AuthForm({ mode }: AuthFormProps) {
         Email Address
         <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" placeholder="you@example.com" className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-indigo-500" />
       </label>
-      <label className="block text-sm font-semibold text-slate-700">
-        Password
-        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={isRegister ? "new-password" : "current-password"} placeholder="Enter your password" className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-indigo-500" />
-      </label>
+      <PasswordField
+        label="Password"
+        value={password}
+        onChange={setPassword}
+        autoComplete={isRegister ? "new-password" : "current-password"}
+        placeholder="Enter your password"
+      />
       {isRegister ? (
-        <label className="block text-sm font-semibold text-slate-700">
-          Confirm Password
-          <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" placeholder="Repeat your password" className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-indigo-500" />
-        </label>
+        <PasswordField
+          label="Confirm Password"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          autoComplete="new-password"
+          placeholder="Repeat your password"
+        />
       ) : null}
       {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">{error}</p> : null}
       <button type="submit" disabled={submitting} className="w-full rounded-xl bg-indigo-600 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-indigo-300">

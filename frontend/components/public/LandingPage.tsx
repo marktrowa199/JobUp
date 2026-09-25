@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { PublicNavbar } from "@/components/public/PublicNavbar";
+import { HomepageCarousel } from "@/components/public/HomepageCarousel";
 
 const workflow = [
   {
@@ -80,7 +81,7 @@ export function LandingPage() {
                     ["02", "See what matters", "Understand requirements before applying"],
                     ["03", "Prepare your next move", "Keep your application focused"],
                   ].map(([number, title, description]) => (
-                    <div key={number} className="flex gap-4 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div key={number} className="flex gap-4 rounded-2xl border border-slate-200 bg-white p-4 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md">
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-xs font-bold text-indigo-700">{number}</span>
                       <div>
                         <p className="font-semibold text-slate-900">{title}</p>
@@ -107,7 +108,7 @@ export function LandingPage() {
             </div>
             <div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-4">
               {workflow.map((step) => (
-                <article key={step.number} className="border-t-2 border-indigo-200 pt-5">
+                <article key={step.number} className="border-t-2 border-indigo-200 pt-5 transition duration-200 hover:-translate-y-1">
                   <p className="text-sm font-bold text-indigo-600">{step.number}</p>
                   <h3 className="mt-5 text-lg font-bold text-slate-900">{step.title}</h3>
                   <p className="mt-3 text-sm leading-6 text-slate-600">{step.description}</p>
@@ -116,6 +117,8 @@ export function LandingPage() {
             </div>
           </div>
         </section>
+
+        <HomepageCarousel />
 
         <section className="bg-white">
           <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:px-10 lg:py-24">
@@ -127,7 +130,7 @@ export function LandingPage() {
               </div>
               <div className="grid gap-x-10 gap-y-9 sm:grid-cols-2">
                 {values.map(([title, description]) => (
-                  <article key={title}>
+                  <article key={title} className="transition duration-200 hover:-translate-y-1">
                     <span className="mb-4 block h-2 w-10 rounded-full bg-indigo-500" aria-hidden="true" />
                     <h3 className="text-lg font-bold text-slate-900">{title}</h3>
                     <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>

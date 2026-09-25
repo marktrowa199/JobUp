@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
 
 export type AuthUser = {
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const pathname = usePathname();
   const { notify } = useNotifications();
 
   const refresh = useCallback(async () => {
@@ -43,9 +45,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!pathname.startsWith("/workspace")) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [pathname, refresh]);
 
   const logout = useCallback(async () => {
     try {
