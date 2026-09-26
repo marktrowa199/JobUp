@@ -26,15 +26,14 @@ async def analyze_job(payload: JobAnalysisRequest) -> JobAnalysisResponse:
 
 @router.get("/search", response_model=JobSearchResponse)
 async def search_jobs_endpoint(
-    keyword: str = Query(default="", min_length=0),
-    location: str = Query(default="", min_length=0),
+    keyword: str = Query(default="", min_length=0, max_length=120),
+    location: str = Query(default="", min_length=0, max_length=120),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=20),
-    job_type: str = Query(default=""),
-    remote: str = Query(default=""),
+    job_type: str = Query(default="", max_length=40),
 ) -> JobSearchResponse:
     try:
-        result = await search_jobs(keyword, location, page, limit, job_type, remote)
+        result = await search_jobs(keyword, location, page, limit, job_type)
         return JobSearchResponse(
             keyword=result.get("keyword", keyword),
             location=result.get("location", location),

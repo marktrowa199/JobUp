@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "JobUp",
-  description: "AI-powered job application assistant",
+  description: "Search jobs in the Philippines and keep track of your applications with JobUp.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -2,50 +2,67 @@ import { NextResponse } from "next/server";
 import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
 import { analyzeResumeText, InvalidResumeError } from "@/lib/resumeDiscovery";
+import { clientAddress, rateLimit, sameOriginRequired } from "@/lib/apiSecurity";
 
 export const runtime = "nodejs";
 
 const MAX_RESUME_BYTES = 8 * 1024 * 1024;
 const BACKEND_API_URL = process.env.BACKEND_API_URL?.trim() || "http://127.0.0.1:8000";
+const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME?.trim() || "jobup_session";
+
+function privateJson(payload: unknown, status = 200) {
+  return NextResponse.json(payload, { status, headers: { "Cache-Control": "no-store" } });
+}
 
 export async function POST(request: Request) {
-  const cookie = request.headers.get("cookie");
+  const originFailure = sameOriginRequired(request);
+  if (originFailure) return originFailure;
+  const limited = rateLimit(request, "resume-analysis", 5, 15 * 60_000);
+  if (limited) return limited;
+  const cookie = request.headers.get("cookie")
+    ?.split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${SESSION_COOKIE_NAME}=`));
   if (!cookie) {
-    return NextResponse.json({ code: "AUTH_REQUIRED" }, { status: 401 });
+    return privateJson({ code: "AUTH_REQUIRED" }, 401);
+  }
+  const contentLength = Number(request.headers.get("content-length") || 0);
+  if (contentLength > MAX_RESUME_BYTES + 128 * 1024) {
+    return privateJson({ code: "FILE_TOO_LARGE" }, 413);
   }
 
   try {
     const sessionResponse = await fetch(`${BACKEND_API_URL}/api/auth/me`, {
-      headers: { Cookie: cookie },
+      headers: { Cookie: cookie, "X-JobUp-Client-IP": clientAddress(request) },
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
     });
     if (!sessionResponse.ok) {
-      return NextResponse.json({ code: "AUTH_REQUIRED" }, { status: 401 });
+      return privateJson({ code: "AUTH_REQUIRED" }, 401);
     }
   } catch (error) {
-    console.error("Resume authentication check failed:", error);
-    return NextResponse.json({ code: "RESUME_ANALYSIS_UNAVAILABLE" }, { status: 503 });
+    console.error("Resume authentication check failed.", { name: error instanceof Error ? error.name : "UnknownError" });
+    return privateJson({ code: "RESUME_ANALYSIS_UNAVAILABLE" }, 503);
   }
 
   let form: FormData;
   try {
     form = await request.formData();
   } catch {
-    return NextResponse.json({ code: "INVALID_RESUME_REQUEST" }, { status: 400 });
+    return privateJson({ code: "INVALID_RESUME_REQUEST" }, 400);
   }
 
   const file = form.get("resume");
   if (!(file instanceof File)) {
-    return NextResponse.json({ code: "INVALID_RESUME_REQUEST" }, { status: 400 });
+    return privateJson({ code: "INVALID_RESUME_REQUEST" }, 400);
   }
   if (file.size > MAX_RESUME_BYTES) {
-    return NextResponse.json({ code: "FILE_TOO_LARGE" }, { status: 413 });
+    return privateJson({ code: "FILE_TOO_LARGE" }, 413);
   }
 
   const extension = file.name.toLowerCase().split(".").pop();
   if (extension !== "pdf" && extension !== "docx" && extension !== "txt") {
-    return NextResponse.json({ code: "UNSUPPORTED_FILE_TYPE" }, { status: 415 });
+    return privateJson({ code: "UNSUPPORTED_FILE_TYPE" }, 415);
   }
 
   try {
@@ -65,14 +82,15 @@ export async function POST(request: Request) {
       if (bytes.includes(0)) throw new InvalidResumeError("This file doesn't contain readable resume text.");
       resumeText = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     }
-    const profile = analyzeResumeText(resumeText, file.name);
-    return NextResponse.json({ profile });
+    const safeFilename = file.name.split(/[\\/]/).pop()?.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 255) || "resume";
+    const profile = analyzeResumeText(resumeText, safeFilename);
+    return privateJson({ profile });
   } catch (error) {
     if (error instanceof InvalidResumeError) {
-      console.warn("Resume could not be read:", error.message);
-      return NextResponse.json({ code: "INVALID_RESUME" }, { status: 422 });
+      console.warn("Resume could not be read.");
+      return privateJson({ code: "INVALID_RESUME" }, 422);
     }
-    console.error("Resume analysis failed:", error);
-    return NextResponse.json({ code: "RESUME_ANALYSIS_UNAVAILABLE" }, { status: 500 });
+    console.error("Resume analysis failed.", { name: error instanceof Error ? error.name : "UnknownError" });
+    return privateJson({ code: "RESUME_ANALYSIS_UNAVAILABLE" }, 500);
   }
 }

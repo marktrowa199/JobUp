@@ -12,10 +12,8 @@ class Settings(BaseSettings):
     allowed_origins: List[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
     )
-    job_api_key: str = Field(default="")
-    job_api_app_id: str = Field(default="")
-    job_api_base_url: str = Field(default="")
-    job_api_provider: str = Field(default="adzuna")
+    trusted_proxy_ips: List[str] = Field(default_factory=lambda: ["127.0.0.1", "::1"])
+    serpapi_api_key: str = Field(default="")
     session_cookie_name: str = Field(default="jobup_session")
     session_expiry_days: int = Field(default=7, ge=1, le=30)
     email_host: str = Field(default="")

@@ -1,240 +1,163 @@
 import { NextResponse } from "next/server";
+import { rateLimit } from "@/lib/apiSecurity";
 
 export const runtime = "nodejs";
 
-type JoobleJob = {
-  title?: unknown;
-  location?: unknown;
-  snippet?: unknown;
-  salary?: unknown;
-  source?: unknown;
-  type?: unknown;
-  link?: unknown;
-  updated?: unknown;
-  company?: unknown;
+type SerpApiJob = {
+  job_id?: string;
+  title?: string;
+  company_name?: string;
+  location?: string;
+  description?: string;
+  via?: string;
+  share_link?: string;
+  apply_options?: Array<{ link?: string }>;
+  detected_extensions?: {
+    posted_at?: string;
+    schedule_type?: string;
+    work_from_home?: boolean;
+    salary?: string;
+  };
+  extensions?: string[];
 };
 
-type SearchBody = {
-  keywords?: unknown;
-  location?: unknown;
-  jobType?: unknown;
-  remote?: unknown;
-};
+type SearchBody = { keywords?: unknown; location?: unknown; pageToken?: unknown };
 
-class JoobleApiError extends Error {
-  constructor(
-    readonly kind: "http" | "invalid-json" | "invalid-response",
-    readonly status?: number,
-  ) {
-    super(kind === "http" ? `Jooble returned HTTP ${status}` : `Jooble returned ${kind}`);
+class SerpApiError extends Error {
+  constructor(readonly kind: "http" | "invalid-json" | "invalid-response", readonly status?: number) {
+    super(kind === "http" ? `SerpApi returned HTTP ${status}` : `SerpApi returned ${kind}`);
   }
 }
-
-const PHILIPPINE_LOCATIONS = [
-  "Angeles City",
-  "Quezon City",
-  "Metro Manila",
-  "Makati",
-  "Pasig",
-  "Taguig",
-  "Pampanga",
-  "Manila",
-  "Cebu",
-  "Davao",
-  "Philippines",
-];
 
 function text(value: unknown, fallback: string): string {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
-function stableId(job: JoobleJob, index: number): string {
-  const link = text(job.link, "");
-  if (link) {
-    return link;
+function normalizeLocation(value: string) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (/^remote(?:\s*\/\s*philippines)?$/i.test(normalized)) {
+    return { location: "Philippines", remoteSearch: true };
   }
-
-  return `${text(job.title, "job")}-${text(job.company, "company")}-${index}`;
+  if (/philippines/i.test(normalized)) return { location: normalized, remoteSearch: false };
+  return { location: `${normalized}, Philippines`, remoteSearch: false };
 }
 
-function normalizeJob(job: JoobleJob, index: number) {
+function normalizeJob(job: SerpApiJob, index: number) {
+  const extensions = job.extensions ?? [];
+  const details = job.detected_extensions ?? {};
+  const description = text(job.description, "No description available.");
+  const remote = details.work_from_home || /remote|work from home|home-based/i.test(`${job.title ?? ""} ${description}`)
+    ? "Remote"
+    : "Not specified";
   return {
-    id: stableId(job, index),
+    id: text(job.job_id, text(job.share_link, `serpapi-ph-${index}`)),
     title: text(job.title, "Not specified"),
-    company: text(job.company, "Not specified"),
-    location: text(job.location, "Not specified"),
-    salary: text(job.salary, "Salary not specified"),
-    description: text(job.snippet, "No description available."),
-    jobType: text(job.type, "Not specified"),
-    url: text(job.link, ""),
-    source: text(job.source, "Jooble"),
-    postedDate: text(job.updated, "Posted recently"),
+    company: text(job.company_name, "Not specified"),
+    location: text(job.location, "Philippines"),
+    description,
+    salary: text(details.salary, "Salary not specified"),
+    jobType: text(details.schedule_type, extensions.find((item) => /full.time|part.time|contract|intern/i.test(item)) ?? "Not specified"),
+    remote,
+    source: text(job.via, "Google Jobs"),
+    url: text(job.apply_options?.find((option) => option.link)?.link, text(job.share_link, "")),
+    postedDate: text(details.posted_at, "Posted recently"),
   };
 }
 
-function jobKey(job: JoobleJob): string {
-  const link = text(job.link, "").toLowerCase();
-  if (link) {
-    return `link:${link}`;
-  }
+async function fetchJobs(apiKey: string, keywords: string, location: string, pageToken?: string) {
+  const url = new URL("https://serpapi.com/search.json");
+  url.searchParams.set("engine", "google_jobs");
+  url.searchParams.set("api_key", apiKey);
+  url.searchParams.set("q", keywords);
+  url.searchParams.set("location", location);
+  url.searchParams.set("gl", "ph");
+  url.searchParams.set("hl", "en");
+  if (pageToken) url.searchParams.set("next_page_token", pageToken);
 
-  return [job.title, job.company, job.location]
-    .map((value) => text(value, "").toLowerCase().replace(/\s+/g, " "))
-    .join("|");
-}
-
-function detectLocation(value: string): { keywords: string; location: string } {
-  const normalized = value.trim().replace(/\s+/g, " ");
-  const detected = PHILIPPINE_LOCATIONS.find((candidate) =>
-    new RegExp(`(?:^|\\s|,)${candidate.replace(" ", "\\s+")}(?:$|\\s|,)`, "i").test(normalized),
-  );
-
-  if (!detected || detected === "Philippines") {
-    return { keywords: normalized, location: "Philippines" };
-  }
-
-  const keywords = normalized
-    .replace(new RegExp(`\\s*(?:in|at|near)\\s+${detected}\\s*$`, "i"), "")
-    .replace(new RegExp(`\\s+${detected}\\s*$`, "i"), "")
-    .trim();
-
-  return { keywords: keywords || normalized, location: `${detected}, Philippines` };
-}
-
-async function fetchJoobleJobs(
-  apiKey: string,
-  keywords: string,
-  location: string,
-  jobType: string,
-  remote: string,
-): Promise<JoobleJob[]> {
-  const response = await fetch(`https://jooble.org/api/${encodeURIComponent(apiKey)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      keywords,
-      location,
-      page: 1,
-      ...(jobType && jobType !== "Any" ? { type: jobType } : {}),
-      ...(remote && remote !== "Any" ? { remote } : {}),
-    }),
-    signal: AbortSignal.timeout(20_000),
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new JoobleApiError("http", response.status);
-  }
+  const response = await fetch(url, { signal: AbortSignal.timeout(20_000), cache: "no-store" });
+  if (!response.ok) throw new SerpApiError("http", response.status);
 
   let payload: unknown;
   try {
     payload = await response.json();
   } catch {
-    throw new JoobleApiError("invalid-json");
+    throw new SerpApiError("invalid-json");
   }
 
-  const jobs =
-    payload && typeof payload === "object" && Array.isArray((payload as { jobs?: unknown }).jobs)
-      ? (payload as { jobs: JoobleJob[] }).jobs
-      : null;
-
-  if (!jobs) {
-    throw new JoobleApiError("invalid-response");
-  }
-
-  return jobs;
+  if (!payload || typeof payload !== "object") throw new SerpApiError("invalid-response");
+  const result = payload as {
+    jobs_results?: unknown;
+    serpapi_pagination?: { next_page_token?: string };
+    error?: string;
+  };
+  if (result.error) throw new SerpApiError("http");
+  if (!Array.isArray(result.jobs_results)) throw new SerpApiError("invalid-response");
+  return {
+    jobs: result.jobs_results as SerpApiJob[],
+    nextPageToken: result.serpapi_pagination?.next_page_token ?? null,
+  };
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.JOOBLE_API_KEY?.trim();
-
+  const limited = rateLimit(request, "job-search", 30, 60_000);
+  if (limited) return limited;
+  const apiKey = process.env.SERPAPI_API_KEY?.trim();
+  if (Number(request.headers.get("content-length") || 0) > 16_384) {
+    return NextResponse.json({ code: "INVALID_SEARCH_REQUEST" }, { status: 413 });
+  }
   let body: SearchBody;
   try {
-    body = (await request.json()) as SearchBody;
+    body = await request.json() as SearchBody;
   } catch {
     return NextResponse.json({ code: "INVALID_SEARCH_REQUEST" }, { status: 400 });
   }
 
-  const requestedKeywords = text(body.keywords, "");
-  const requestedLocation = text(body.location, "");
-  const jobType = text(body.jobType, "");
-  const remote = text(body.remote, "");
-
-  if (!requestedKeywords) {
-    return NextResponse.json({ code: "MISSING_KEYWORD" }, { status: 400 });
+  const keywords = text(body.keywords, "");
+  const requestedLocation = text(body.location, "Philippines");
+  const pageToken = typeof body.pageToken === "string" ? body.pageToken.trim() : "";
+  if (!keywords) return NextResponse.json({ code: "MISSING_KEYWORD" }, { status: 400 });
+  if (keywords.length > 120 || requestedLocation.length > 120 || pageToken.length > 4096) {
+    return NextResponse.json({ code: "INVALID_SEARCH_REQUEST" }, { status: 400 });
   }
 
   if (!apiKey || apiKey === "YOUR_API_KEY") {
-    console.error("JOOBLE API ERROR:", "Server-side search credentials are missing or invalid.");
-    return NextResponse.json(
-      { code: "JOB_SEARCH_NOT_CONFIGURED" },
-      { status: 503 },
-    );
+    console.error("Google Jobs search is not configured: SERPAPI_API_KEY is missing.");
+    return NextResponse.json({ code: "JOB_SEARCH_NOT_CONFIGURED" }, { status: 503 });
   }
 
-  const detected = requestedLocation
-    ? { keywords: requestedKeywords, location: requestedLocation }
-    : detectLocation(requestedKeywords);
-  const searchLocation = requestedLocation
-    ? requestedLocation
-    : detected.location.toLowerCase().includes("philippines")
-      ? detected.location
-      : `${detected.location}, Philippines`;
+  const normalizedLocation = normalizeLocation(requestedLocation);
+  const searchKeywords = normalizedLocation.remoteSearch ? `remote ${keywords}` : keywords;
 
   try {
-    let jobs = await fetchJoobleJobs(apiKey, detected.keywords, searchLocation, jobType, remote);
-    let locationBroadened = false;
-
-    if (jobs.length === 0 && searchLocation.toLowerCase() !== "philippines") {
-      jobs = await fetchJoobleJobs(apiKey, detected.keywords, "Philippines", jobType, remote);
-      locationBroadened = jobs.length > 0;
-    }
-
-    const uniqueJobs = jobs.filter((job, index, allJobs) => {
-      const key = jobKey(job);
-      return key !== "||" && allJobs.findIndex((candidate) => jobKey(candidate) === key) === index;
-    });
-
+    const result = await fetchJobs(apiKey, searchKeywords, normalizedLocation.location, pageToken);
     return NextResponse.json({
-      jobs: uniqueJobs.slice(0, 20).map(normalizeJob),
-      keyword: detected.keywords,
-      location: locationBroadened ? "Philippines" : searchLocation,
-      locationBroadened,
+      jobs: result.jobs.map(normalizeJob),
+      keyword: keywords,
+      location: normalizedLocation.location,
+      pageToken: pageToken || null,
+      nextPageToken: result.nextPageToken,
+      limit: 10,
+      total: result.jobs.length,
+      locationBroadened: false,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    const safeErrorMessage = apiKey
-      ? errorMessage
-          .replaceAll(encodeURIComponent(apiKey), "[redacted]")
-          .replaceAll(apiKey, "[redacted]")
-      : errorMessage;
-    console.error("JOOBLE API ERROR:", {
+    console.error("Google Jobs search failed:", {
       name: error instanceof Error ? error.name : "UnknownError",
-      message: safeErrorMessage,
+      message: apiKey
+        ? errorMessage.replaceAll(encodeURIComponent(apiKey), "[redacted]").replaceAll(apiKey, "[redacted]")
+        : errorMessage,
     });
 
-    if (error instanceof JoobleApiError) {
-      if (error.kind === "http") {
-        const status = error.status === 429 ? 429 : 502;
-        return NextResponse.json(
-          { code: `JOB_SEARCH_PROVIDER_${error.status ?? "ERROR"}` },
-          { status },
-        );
-      }
-
-      return NextResponse.json(
-        { code: error.kind === "invalid-json" ? "JOB_SEARCH_INVALID_JSON" : "JOB_SEARCH_INVALID_RESPONSE" },
-        { status: 502 },
-      );
+    if (error instanceof SerpApiError && error.kind === "http") {
+      const code = error.status === 401 ? "JOB_SEARCH_PROVIDER_401" : error.status === 403 ? "JOB_SEARCH_PROVIDER_403" : "JOB_SEARCH_PROVIDER_ERROR";
+      return NextResponse.json({ code }, { status: 502 });
+    }
+    if (error instanceof SerpApiError) {
+      return NextResponse.json({ code: error.kind === "invalid-json" ? "JOB_SEARCH_INVALID_JSON" : "JOB_SEARCH_INVALID_RESPONSE" }, { status: 502 });
     }
 
-    const timedOut = error instanceof Error
-      && (error.name === "TimeoutError" || error.name === "AbortError");
-    return NextResponse.json(
-      {
-        code: timedOut ? "JOB_SEARCH_TIMEOUT" : "JOB_SEARCH_NETWORK_ERROR",
-      },
-      { status: timedOut ? 504 : 503 },
-    );
+    const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+    return NextResponse.json({ code: timedOut ? "JOB_SEARCH_TIMEOUT" : "JOB_SEARCH_NETWORK_ERROR" }, { status: timedOut ? 504 : 503 });
   }
 }

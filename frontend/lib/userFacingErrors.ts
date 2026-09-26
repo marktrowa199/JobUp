@@ -12,6 +12,7 @@ export const userFacingErrors = {
   JOB_SEARCH_TIMEOUT: "The service is taking longer than expected. Please try again.",
   JOB_SEARCH_NETWORK_ERROR: "Live job listings are temporarily unavailable. Please try again later.",
   INVALID_SEARCH_REQUEST: "We couldn't complete your search. Please try again.",
+  INVALID_PAGE: "We couldn't load that results page. Please try again.",
   MISSING_KEYWORD: "Enter a job title or keyword to search.",
   NO_RESULTS: "No matching jobs were found. Try changing your keywords or location.",
   RECOMMENDATIONS_UNAVAILABLE: "We couldn't generate recommendations right now. Please try uploading your resume again later.",

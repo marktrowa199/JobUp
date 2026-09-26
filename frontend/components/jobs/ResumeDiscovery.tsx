@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { normalizeJobFromApi, type Job } from "@/lib/jobSearch";
-import { useAuth } from "@/components/auth/AuthProvider";
 import {
   getRoleSearchQueries,
   rankResumeJob,
@@ -14,62 +13,10 @@ import { useNotifications } from "@/components/notifications/NotificationProvide
 import { userFacingErrorMessage } from "@/lib/userFacingErrors";
 import { ApplicationLink } from "@/components/jobs/ApplicationLink";
 
-const RESUME_PROFILE_KEY = "jobup-resume-profile";
-const RESUME_PROFILE_EVENT = "jobup-resume-profile-change";
-
-function subscribeToResumeProfile(onChange: () => void, profileKey: string) {
-  const handleStorageChange = (event: StorageEvent) => {
-    if (event.key === profileKey) onChange();
-  };
-  window.addEventListener("storage", handleStorageChange);
-  window.addEventListener(RESUME_PROFILE_EVENT, onChange);
-  return () => {
-    window.removeEventListener("storage", handleStorageChange);
-    window.removeEventListener(RESUME_PROFILE_EVENT, onChange);
-  };
-}
-
-function getResumeProfileSnapshot(profileKey: string) {
-  return window.localStorage.getItem(profileKey);
-}
-
-function getServerResumeProfileSnapshot() {
-  return null;
-}
-
-function isResumeProfile(value: unknown): value is ResumeProfile {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<ResumeProfile>;
-  return typeof candidate.fileName === "string"
-    && (typeof candidate.name === "string" || candidate.name === null)
-    && !!candidate.contact && typeof candidate.contact === "object"
-    && [
-    candidate.roles,
-    candidate.skills,
-    candidate.technologies,
-    candidate.experience,
-    candidate.education,
-    candidate.certifications,
-    candidate.projects,
-    candidate.summary,
-    candidate.keywords,
-  ].every(Array.isArray);
-}
-
-function parseResumeProfile(value: string | null): ResumeProfile | null {
-  if (!value) return null;
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return isResumeProfile(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
 function RecommendationCard({ match }: { match: ResumeJobMatch }) {
   const { job, score, matchedSkills, reason } = match;
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <article className="rounded-xl border border-slate-200 bg-white p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="break-words text-lg font-semibold text-slate-900">{job.title}</h3>
@@ -111,19 +58,7 @@ function RecommendationCard({ match }: { match: ResumeJobMatch }) {
   );
 }
 export function ResumeDiscovery() {
-  const { user } = useAuth();
-  const profileKey = `${RESUME_PROFILE_KEY}:${user?.id ?? "anonymous"}`;
-  const subscribe = useCallback(
-    (onChange: () => void) => subscribeToResumeProfile(onChange, profileKey),
-    [profileKey],
-  );
-  const getSnapshot = useCallback(() => getResumeProfileSnapshot(profileKey), [profileKey]);
-  const savedProfile = useSyncExternalStore(
-    subscribe,
-    getSnapshot,
-    getServerResumeProfileSnapshot,
-  );
-  const profile = parseResumeProfile(savedProfile);
+  const [profile, setProfile] = useState<ResumeProfile | null>(null);
   const [matches, setMatches] = useState<ResumeJobMatch[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -132,59 +67,49 @@ export function ResumeDiscovery() {
   const { notify } = useNotifications();
 
   useEffect(() => {
-    const parsedProfile = parseResumeProfile(savedProfile);
-    if (!parsedProfile) return;
-    const activeProfile: ResumeProfile = parsedProfile;
+    if (!profile) return;
+    const activeProfile = profile;
     let cancelled = false;
     const roles = getRoleSearchQueries(activeProfile);
 
     async function loadMatches() {
       setSearching(true);
       setError(null);
-      const results = await Promise.allSettled(
-        roles.map((keyword) => searchJobsApi({ keyword, location: "Philippines" })),
-      );
-      if (cancelled) return;
+      try {
+        const response = await searchJobsApi({ keyword: roles.join(", "), location: "Philippines" });
+        if (cancelled) return;
 
-      const responses = results.filter((result) => result.status === "fulfilled");
-      if (responses.length === 0) {
+        const uniqueJobs = new Map<string, Job>();
+        for (const item of response.jobs) {
+          const job = normalizeJobFromApi(item);
+          const key = job.url || `${job.title}|${job.company}|${job.location}`.toLowerCase();
+          if (!uniqueJobs.has(key)) uniqueJobs.set(key, job);
+        }
+
+        const ranked = [...uniqueJobs.values()]
+          .map((job) => rankResumeJob(job, activeProfile, roles))
+          .sort((first, second) => second.score - first.score)
+          .slice(0, 8);
+        setMatches(ranked);
+        if (ranked.length === 0) {
+          setError({ title: "Recommendations", message: userFacingErrorMessage("NO_RESULTS") });
+        }
+      } catch {
+        if (cancelled) return;
         setMatches([]);
         setError({
           title: "Recommendations",
           message: userFacingErrorMessage("RECOMMENDATIONS_UNAVAILABLE"),
           retryable: true,
         });
-        setSearching(false);
-        return;
+      } finally {
+        if (!cancelled) setSearching(false);
       }
-
-      const uniqueJobs = new Map<string, Job>();
-      for (const result of responses) {
-        if (result.status !== "fulfilled") continue;
-        for (const item of result.value.jobs) {
-          const job = normalizeJobFromApi(item);
-          const key = job.url || `${job.title}|${job.company}|${job.location}`.toLowerCase();
-          if (!uniqueJobs.has(key)) uniqueJobs.set(key, job);
-        }
-      }
-
-      const ranked = [...uniqueJobs.values()]
-        .map((job) => rankResumeJob(job, activeProfile, roles))
-        .sort((first, second) => second.score - first.score)
-        .slice(0, 8);
-      setMatches(ranked);
-      if (responses.length < results.length) {
-        setError({
-          title: "Recommendations",
-          message: userFacingErrorMessage("RECOMMENDATIONS_PARTIAL"),
-        });
-      }
-      setSearching(false);
     }
 
     void loadMatches();
     return () => { cancelled = true; };
-  }, [savedProfile, searchAttempt]);
+  }, [profile, searchAttempt]);
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -208,8 +133,7 @@ export function ResumeDiscovery() {
     setSearching(false);
     setError(null);
     setMatches([]);
-    window.localStorage.removeItem(profileKey);
-    window.dispatchEvent(new Event(RESUME_PROFILE_EVENT));
+    setProfile(null);
     const form = new FormData();
     form.set("resume", file);
 
@@ -222,8 +146,7 @@ export function ResumeDiscovery() {
         notify("warning", message);
         return;
       }
-      window.localStorage.setItem(profileKey, JSON.stringify(payload.profile));
-      window.dispatchEvent(new Event(RESUME_PROFILE_EVENT));
+      setProfile(payload.profile);
       notify("success", "Resume analyzed. Finding matching jobs across the Philippines.");
     } catch {
       const message = userFacingErrorMessage("RESUME_ANALYSIS_UNAVAILABLE");
@@ -235,8 +158,7 @@ export function ResumeDiscovery() {
   };
 
   const clearResume = () => {
-    window.localStorage.removeItem(profileKey);
-    window.dispatchEvent(new Event(RESUME_PROFILE_EVENT));
+    setProfile(null);
     setMatches([]);
     setSearching(false);
     setError(null);
@@ -244,14 +166,13 @@ export function ResumeDiscovery() {
   };
 
   return (
-    <section className="mb-8 overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-sm" aria-labelledby="resume-discovery-title">
-      <div className="border-b border-emerald-100 bg-emerald-50/70 px-5 py-5 sm:px-7">
+    <section className="mb-8 overflow-hidden rounded-xl border border-slate-200 bg-white" aria-labelledby="resume-discovery-title">
+      <div className="border-b border-slate-200 px-5 py-5 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-800">Personalized for you</p>
-            <h2 id="resume-discovery-title" className="mt-2 text-2xl font-bold text-slate-900">Resume-Powered Discovery</h2>
+            <h2 id="resume-discovery-title" className="text-xl font-semibold text-slate-900">Find matching jobs with your resume</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Find real Philippine job listings that fit your skills, experience, and related career paths.
+              Upload your resume and we’ll use your skills and experience to find relevant opportunities in the Philippines. Extracted details stay in memory and clear when you leave this page.
             </p>
           </div>
           {profile && (
@@ -266,13 +187,13 @@ export function ResumeDiscovery() {
         </div>
       </div>
 
-      <div className="p-5 sm:p-7">
+      <div className="p-5 sm:p-6">
         {!profile ? (
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
             <div>
               <h3 className="font-semibold text-slate-900">Start with your resume</h3>
               <p className="mt-1 text-sm text-slate-600">
-                Upload a text-based PDF or TXT file, up to 8 MB. The original file is not saved.
+                Upload a PDF, DOCX, or TXT resume up to 8 MB. JobUp checks that it contains resume information; the original file is not saved.
               </p>
             </div>
             <label className={`inline-flex cursor-pointer items-center rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800 ${analyzing ? "pointer-events-none opacity-60" : ""}`}>

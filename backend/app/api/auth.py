@@ -53,15 +53,15 @@ def get_current_user(
 @router.post("/register", response_model=AuthMessage, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> AuthMessage:
     if find_user_by_email(db, normalize_email(payload.email)):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists.")
+        return AuthMessage(success=True, message="If an account can be created with those details, it is ready to use.")
 
     try:
         create_user(db, payload.full_name, payload.email, payload.password)
-    except IntegrityError as exc:
+    except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists.") from exc
+        return AuthMessage(success=True, message="If an account can be created with those details, it is ready to use.")
 
-    return AuthMessage(success=True, message="Account created successfully.")
+    return AuthMessage(success=True, message="If an account can be created with those details, it is ready to use.")
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -96,5 +96,11 @@ def logout(
     session_token: str | None = Cookie(default=None, alias=settings.session_cookie_name),
 ) -> AuthMessage:
     delete_session(db, session_token)
-    response.delete_cookie(key=settings.session_cookie_name, path="/")
+    response.delete_cookie(
+        key=settings.session_cookie_name,
+        path="/",
+        secure=_cookie_secure(),
+        httponly=True,
+        samesite="lax",
+    )
     return AuthMessage(success=True, message="You have been logged out.")

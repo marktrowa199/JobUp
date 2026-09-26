@@ -41,5 +41,5 @@ def send_login_notification(user: User, login_time: datetime) -> bool:
             smtp.send_message(message)
         return True
     except (OSError, smtplib.SMTPException):
-        logger.exception("Unable to send login notification email for user %s", user.id)
+        logger.error("Unable to send login notification email.")
         return False

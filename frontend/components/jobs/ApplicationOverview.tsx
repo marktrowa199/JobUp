@@ -77,7 +77,7 @@ export function ApplicationOverview() {
     }
   };
 
-  const submittedCount = applications.filter((application) => application.status !== "In Progress").length;
+  const submittedCount = applications.length;
   const inProgressCount = applications.filter((application) => application.status === "In Progress").length;
   const interviewCount = applications.filter((application) => application.status === "Interview").length;
 

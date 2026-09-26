@@ -11,6 +11,7 @@ backend/**/*.py[cod]
 backend/.env
 backend/.env.*
 !backend/.env.example
+frontend/.env
 frontend/.env.local
 frontend/.env.*
 *.env.local

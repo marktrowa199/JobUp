@@ -47,7 +47,7 @@ def track_application(
         company=payload.company,
         location=payload.location,
         url=str(payload.url),
-        status="In Progress",
+        status="Submitted",
     )
     db.add(application)
     db.commit()

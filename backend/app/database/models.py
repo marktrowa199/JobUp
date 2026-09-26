@@ -45,7 +45,7 @@ class JobApplication(Base):
     company: Mapped[str] = mapped_column(String(250), nullable=False)
     location: Mapped[str] = mapped_column(String(250), nullable=False)
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
-    status: Mapped[str] = mapped_column(String(30), nullable=False, default="In Progress")
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="Submitted")
     applied_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

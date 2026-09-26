@@ -20,7 +20,7 @@ export function ApplicationLink({ job, className }: { job: Job; className: strin
       location: job.location,
       url: job.url,
     }).then(() => {
-      notify("success", "Application tracked as In Progress. Update its status in My Applications after you apply.");
+      notify("success", "Application saved as Submitted. You can update its status in My Applications.");
     }).catch(() => {
       notify("warning", userFacingErrorMessage("APPLICATION_TRACK_FAILED"));
     }).finally(() => {

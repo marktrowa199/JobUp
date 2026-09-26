@@ -20,6 +20,7 @@ export type JobApiItem = {
   description?: string;
   salary?: string;
   jobType?: string;
+  remote?: string;
   source: string;
   url: string;
   postedDate?: string;
@@ -33,6 +34,7 @@ export type JobSearchResponse = {
   total: number;
   jobs: JobApiItem[];
   locationBroadened: boolean;
+  nextPageToken: string | null;
 };
 
 export type JobDetailsResponse = {
@@ -57,8 +59,8 @@ export type JobDetailsResponse = {
 export async function searchJobsApi(params: {
   keyword: string;
   location: string;
-  jobType?: string;
-  remote?: string;
+  page?: number;
+  pageToken?: string | null;
 }): Promise<JobSearchResponse> {
   let response: Response;
   try {
@@ -68,8 +70,8 @@ export async function searchJobsApi(params: {
       body: JSON.stringify({
         keywords: params.keyword,
         location: params.location,
-        jobType: params.jobType,
-        remote: params.remote,
+        page: params.page ?? 1,
+        pageToken: params.pageToken ?? null,
       }),
       cache: "no-store",
     });
@@ -90,7 +92,10 @@ export async function searchJobsApi(params: {
     jobs: JobApiItem[];
     keyword?: string;
     location?: string;
+    page?: number;
+    total?: number;
     locationBroadened?: boolean;
+    nextPageToken?: string | null;
   };
   try {
     payload = await response.json();
@@ -101,16 +106,17 @@ export async function searchJobsApi(params: {
   return {
     keyword: payload.keyword ?? params.keyword,
     location: payload.location ?? params.location ?? "Philippines",
-    page: 1,
+    page: typeof payload.page === "number" ? payload.page : params.page ?? 1,
     limit: payload.jobs.length,
-    total: payload.jobs.length,
+    total: typeof payload.total === "number" ? payload.total : payload.jobs.length,
     jobs: payload.jobs,
     locationBroadened: payload.locationBroadened ?? false,
+    nextPageToken: payload.nextPageToken ?? null,
   };
 }
 
 export async function getJob(jobId: string): Promise<JobDetailsResponse> {
-  const response = await fetch(`http://127.0.0.1:8000/api/jobs/${encodeURIComponent(jobId)}`, {
+  const response = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
     cache: "no-store",

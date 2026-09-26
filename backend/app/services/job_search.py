@@ -1,177 +1,123 @@
 from datetime import datetime
 from typing import Any
-from urllib.parse import urlparse
 
 import httpx
 
 from app.core.config import settings
 
-
-def _normalize_remote(raw: Any) -> str:
-    if raw is None:
-        return "Not specified"
-    if isinstance(raw, bool):
-        return "Remote" if raw else "On-site"
-    value = str(raw).strip()
-    return value if value else "Not specified"
+_JOB_CACHE: dict[str, dict[str, Any]] = {}
+_PAGE_TOKENS: dict[tuple[str, str, int], str] = {}
+_MAX_CACHED_JOBS = 500
 
 
-def _normalize_salary(raw: Any) -> str:
-    if raw is None:
-        return "Salary not specified"
-    if isinstance(raw, dict):
-        value = raw.get("from") or raw.get("to") or raw.get("currency")
-        if value is not None:
-            return str(value)
-    return str(raw).strip() or "Salary not specified"
-
-
-def _normalize_date(raw: Any) -> str:
-    if raw is None:
-        return "Posted recently"
-    if isinstance(raw, (int, float)):
-        try:
-            return datetime.fromtimestamp(int(raw)).strftime("%Y-%m-%d")
-        except (TypeError, ValueError):
-            return "Posted recently"
-    if isinstance(raw, str):
-        return raw
-    return "Posted recently"
-
-
-def _provider_name() -> str:
-    return settings.job_api_provider.strip().capitalize() or "Job Provider"
-
-
-def _normalize_company(raw: Any) -> dict[str, Any]:
-    if isinstance(raw, dict):
-        return {
-            "name": raw.get("display_name") or raw.get("name") or "Not specified",
-            "description": raw.get("description"),
-            "website": raw.get("website") or raw.get("url"),
-            "industry": raw.get("industry") or raw.get("label"),
-        }
+def _normalize_job(item: dict[str, Any], index: int) -> dict[str, Any]:
+    extensions = item.get("extensions") or []
+    detected = item.get("detected_extensions") or {}
+    apply_options = item.get("apply_options") or []
+    apply_url = next((option.get("link") for option in apply_options if option.get("link")), None)
+    description = item.get("description") or "No description available."
+    remote = detected.get("work_from_home") or any(
+        term in f"{item.get('title', '')} {description}".lower()
+        for term in ("remote", "work from home", "home-based")
+    )
+    identifier = str(item.get("job_id") or item.get("share_link") or f"serpapi-ph-{index}")
+    try:
+        posted = datetime.strptime(detected.get("posted_at", ""), "%Y-%m-%d").strftime("%Y-%m-%d")
+    except (TypeError, ValueError):
+        posted = detected.get("posted_at") or "Posted recently"
+    job_type = detected.get("schedule_type") or next(
+        (value for value in extensions if any(term in value.lower() for term in ("full-time", "part-time", "contract", "intern"))),
+        "Not specified",
+    )
     return {
-        "name": str(raw).strip() if raw else "Not specified",
-        "description": None,
-        "website": None,
+        "id": identifier,
+        "title": item.get("title") or "Not specified",
+        "company": item.get("company_name") or "Not specified",
+        "company_details": {"name": item.get("company_name") or "Not specified", "description": None, "website": None, "industry": None},
+        "location": item.get("location") or "Philippines",
+        "description": description,
+        "salary": detected.get("salary") or "Salary not specified",
+        "job_type": job_type,
+        "remote": "Remote" if remote else "Not specified",
+        "posted_date": posted,
+        "source": "Google Jobs",
+        "url": apply_url or item.get("share_link") or "",
         "industry": None,
     }
 
 
-def _normalize_job(item: dict[str, Any], provider: str) -> dict[str, Any]:
-    company = _normalize_company(item.get("company"))
-    location = item.get("location")
-    if isinstance(location, dict):
-        location = location.get("display_name") or location.get("area")
-
-    category = item.get("category")
-    if isinstance(category, dict):
-        category = category.get("label")
-
-    return {
-        "id": str(item.get("id") or item.get("job_id") or ""),
-        "title": item.get("title") or "Not specified",
-        "company": company["name"],
-        "company_details": company,
-        "location": location or item.get("location_name") or "Not specified",
-        "description": item.get("description") or item.get("snippet") or "No description available.",
-        "salary": _normalize_salary(item.get("salary") or item.get("salary_min")),
-        "job_type": item.get("contract_type") or item.get("employment_type") or "Not specified",
-        "remote": _normalize_remote(item.get("remote") or item.get("remote_work") or item.get("work_from_home")),
-        "posted_date": _normalize_date(item.get("created") or item.get("published") or item.get("date")),
-        "source": provider,
-        "url": item.get("redirect_url") or item.get("url") or "",
-        "industry": category,
-    }
-
-
-def _details_url(job_id: str) -> str:
-    parsed = urlparse(settings.job_api_base_url)
-    path_parts = [part for part in parsed.path.split("/") if part]
-    if "search" in path_parts:
-        path_parts[path_parts.index("search")] = "details"
-        path_parts = path_parts[: path_parts.index("details") + 1] + [job_id]
-    else:
-        path_parts.extend(["details", job_id])
-    return parsed._replace(path="/" + "/".join(path_parts), query="").geturl()
-
-
-async def search_jobs(keyword: str, location: str, page: int, limit: int, job_type: str, remote: str) -> dict[str, Any]:
-    api_key = settings.job_api_key
-    base_url = settings.job_api_base_url
-
-    if not api_key or not base_url:
+async def search_jobs(keyword: str, location: str, page: int, limit: int, job_type: str) -> dict[str, Any]:
+    api_key = settings.serpapi_api_key.strip()
+    if not api_key:
         raise RuntimeError("Job search provider is not configured.")
+    normalized_location = location.strip() or "Philippines"
+    remote_search = normalized_location.lower() in {"remote", "remote / philippines", "remote/philippines"}
+    if remote_search:
+        keyword = f"remote {keyword}"
+        normalized_location = "Philippines"
+    elif "philippines" not in normalized_location.lower() and "pilipinas" not in normalized_location.lower():
+        normalized_location = f"{normalized_location}, Philippines"
 
-    params: dict[str, Any] = {
-        "app_id": settings.job_api_app_id or "",
-        "app_key": api_key,
-        "results_per_page": limit,
-        "page": page,
-        "what": keyword,
-        "where": location,
+    token_key = (keyword.lower(), normalized_location.lower(), page)
+    params: dict[str, str] = {
+        "engine": "google_jobs",
+        "api_key": api_key,
+        "q": keyword,
+        "location": normalized_location,
+        "gl": "ph",
+        "hl": "en",
     }
-
-    if job_type:
-        params["full_time"] = "1" if job_type.lower() == "full time" else None
-    if remote:
-        params["remote_only"] = "1" if remote.lower() == "remote" else None
-
-    filtered_params = {key: value for key, value in params.items() if value not in (None, "", False)}
+    if page > 1:
+        page_token = _PAGE_TOKENS.get(token_key)
+        if not page_token:
+            raise RuntimeError("No cursor is available for the requested page. Search from the first page again.")
+        params["next_page_token"] = page_token
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.get(base_url, params=filtered_params)
+            response = await client.get("https://serpapi.com/search.json", params=params)
             response.raise_for_status()
             payload = response.json()
-    except httpx.HTTPError as exc:
-        raise RuntimeError(f"External job API request failed: {exc}") from exc
+    except (httpx.HTTPError, ValueError) as exc:
+        message = str(exc).replace(api_key, "[redacted]")
+        raise RuntimeError(f"External job API request failed: {message}") from None
 
-    results = payload.get("results") or payload.get("jobs") or []
-    normalized_jobs: list[dict[str, Any]] = []
+    if not isinstance(payload, dict) or not isinstance(payload.get("jobs_results"), list) or payload.get("error"):
+        raise RuntimeError("External job API returned an invalid response.")
 
-    provider = _provider_name()
-    for item in results:
-        normalized = _normalize_job(item, provider)
-        if normalized["id"]:
-            normalized_jobs.append(normalized)
+    jobs: list[dict[str, Any]] = []
+    for index, item in enumerate(payload["jobs_results"]):
+        if not isinstance(item, dict):
+            continue
+        normalized = _normalize_job(item, index)
+        jobs.append(normalized)
+        _JOB_CACHE[normalized["id"]] = normalized
 
+    next_token = (payload.get("serpapi_pagination") or {}).get("next_page_token")
+    next_page = (keyword.lower(), normalized_location.lower(), page + 1)
+    if next_token:
+        _PAGE_TOKENS[next_page] = next_token
+    else:
+        _PAGE_TOKENS.pop(next_page, None)
+    while len(_JOB_CACHE) > _MAX_CACHED_JOBS:
+        _JOB_CACHE.pop(next(iter(_JOB_CACHE)))
+
+    if job_type:
+        jobs = [job for job in jobs if job_type.lower() in job["job_type"].lower()]
     return {
         "keyword": keyword,
-        "location": location,
+        "location": normalized_location,
         "page": page,
         "limit": limit,
-        "total": len(normalized_jobs),
-        "jobs": normalized_jobs,
+        "total": len(jobs),
+        "jobs": jobs[:limit],
         "source": "external",
         "message": "Jobs fetched successfully.",
     }
 
 
 async def get_job(job_id: str) -> dict[str, Any]:
-    api_key = settings.job_api_key
-    base_url = settings.job_api_base_url
-    if not api_key or not base_url:
-        raise RuntimeError("Job search provider is not configured.")
-
-    params = {
-        "app_id": settings.job_api_app_id or "",
-        "app_key": api_key,
-    }
-    filtered_params = {key: value for key, value in params.items() if value}
-
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.get(_details_url(job_id), params=filtered_params)
-            response.raise_for_status()
-            payload = response.json()
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 404:
-            raise LookupError("Job listing was not found.") from exc
-        raise RuntimeError("External job API request failed.") from exc
-    except (httpx.HTTPError, ValueError) as exc:
-        raise RuntimeError("External job API request failed.") from exc
-
-    payload.setdefault("id", job_id)
-    return _normalize_job(payload, _provider_name())
+    job = _JOB_CACHE.get(job_id)
+    if job is None:
+        raise LookupError("Job listing was not found in the recent search results.")
+    return job

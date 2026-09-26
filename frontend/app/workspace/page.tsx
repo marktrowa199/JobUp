@@ -1,6 +1,5 @@
 import { Navbar } from "@/components/navbar/Navbar";
 import { ProtectedWorkspace } from "@/components/auth/ProtectedWorkspace";
-import { ApplicationOverview } from "@/components/jobs/ApplicationOverview";
 import { WorkspaceLanding } from "@/components/workspace/WorkspaceLanding";
 
 export default function WorkspacePage() {

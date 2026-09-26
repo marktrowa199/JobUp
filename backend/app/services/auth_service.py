@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta, timezone
+import hashlib
 import secrets
 
 from pwdlib import PasswordHash
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -48,7 +49,7 @@ def create_session(db: Session, user: User) -> tuple[str, datetime]:
     token = secrets.token_urlsafe(48)
     db.add(
         AuthSession(
-            session_token=token,
+            session_token=_hash_session_token(token),
             user_id=user.id,
             expires_at=expires_at,
             created_at=now,
@@ -62,18 +63,28 @@ def get_user_for_session(db: Session, token: str | None) -> User | None:
     if not token:
         return None
 
+    token_hash = _hash_session_token(token)
     session = db.scalar(
         select(AuthSession).where(
-            AuthSession.session_token == token,
+            or_(AuthSession.session_token == token_hash, AuthSession.session_token == token),
             AuthSession.expires_at > datetime.now(timezone.utc),
         )
     )
     if not session:
         return None
+    if session.session_token == token:
+        session.session_token = token_hash
+        db.commit()
     return session.user
 
 
 def delete_session(db: Session, token: str | None) -> None:
     if token:
-        db.execute(delete(AuthSession).where(AuthSession.session_token == token))
+        db.execute(delete(AuthSession).where(
+            or_(AuthSession.session_token == _hash_session_token(token), AuthSession.session_token == token)
+        ))
         db.commit()
+
+
+def _hash_session_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

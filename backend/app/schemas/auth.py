@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 class RegisterRequest(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=200)
-    email: EmailStr
+    email: EmailStr = Field(..., max_length=254)
     password: str = Field(..., min_length=8, max_length=128)
 
     @field_validator("full_name")
@@ -18,7 +18,7 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: EmailStr = Field(..., max_length=254)
     password: str = Field(..., min_length=1, max_length=128)
 
 

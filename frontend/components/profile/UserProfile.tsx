@@ -25,13 +25,15 @@ export function UserProfile() {
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="flex items-center gap-3 rounded-full border border-slate-200 bg-slate-50 px-2 py-2 shadow-sm"
+        className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5"
+        aria-label={`Profile for ${user.full_name}`}
         aria-expanded={isOpen}
         aria-haspopup="menu"
       >
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 text-sm font-semibold text-indigo-700">
           {initials}
         </div>
+        <span className="hidden text-sm font-medium text-slate-700 md:inline">Profile</span>
         <div className="hidden text-left sm:block">
           <p className="max-w-32 truncate text-sm font-semibold text-slate-900">{user.full_name}</p>
           <p className="text-xs text-slate-500">{user.status}</p>

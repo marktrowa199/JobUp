@@ -2,9 +2,9 @@ from pydantic import BaseModel, Field
 
 
 class JobAnalysisRequest(BaseModel):
-    title: str = Field(..., min_length=2, description="Job title")
-    company: str = Field(..., min_length=2, description="Company name")
-    description: str = Field(..., min_length=30, description="Detailed job description")
+    title: str = Field(..., min_length=2, max_length=250, description="Job title")
+    company: str = Field(..., min_length=2, max_length=250, description="Company name")
+    description: str = Field(..., min_length=30, max_length=20_000, description="Detailed job description")
 
 
 class JobAnalysisResponse(BaseModel):
@@ -21,7 +21,6 @@ class JobSearchQuery(BaseModel):
     page: int = Field(default=1, ge=1)
     limit: int = Field(default=10, ge=1, le=20)
     job_type: str = Field(default="", description="Optional job type filter")
-    remote: str = Field(default="", description="Optional remote filter")
 
 
 class JobSearchResultItem(BaseModel):
