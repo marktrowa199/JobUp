@@ -76,7 +76,10 @@ export function ResumeDiscovery() {
       setSearching(true);
       setError(null);
       try {
-        const response = await searchJobsApi({ keyword: roles.join(", "), location: "Philippines" });
+        // Search Google Jobs with one recognizable title. A comma-separated list of
+        // roles is not a reliable Google Jobs query and can trigger provider errors.
+        const keyword = roles[0] || activeProfile.skills.slice(0, 2).join(" ");
+        const response = await searchJobsApi({ keyword, location: "Philippines" });
         if (cancelled) return;
 
         const uniqueJobs = new Map<string, Job>();

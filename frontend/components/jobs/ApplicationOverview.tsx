@@ -33,6 +33,7 @@ export function ApplicationOverview() {
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [savingIds, setSavingIds] = useState<number[]>([]);
+  const [selectedSection, setSelectedSection] = useState<"all" | "in-progress" | "interviews">("all");
   const { notify } = useNotifications();
 
   useEffect(() => {
@@ -80,6 +81,16 @@ export function ApplicationOverview() {
   const submittedCount = applications.length;
   const inProgressCount = applications.filter((application) => application.status === "In Progress").length;
   const interviewCount = applications.filter((application) => application.status === "Interview").length;
+  const visibleApplications = applications.filter((application) => {
+    if (selectedSection === "in-progress") return application.status === "In Progress";
+    if (selectedSection === "interviews") return application.status === "Interview";
+    return true;
+  });
+  const sectionTitle = selectedSection === "in-progress"
+    ? "In Progress"
+    : selectedSection === "interviews"
+      ? "Interviews"
+      : "Applications Submitted";
 
   return (
     <section id="my-applications" className="border-t border-slate-200 pt-9" aria-labelledby="applications-title">
@@ -108,26 +119,50 @@ export function ApplicationOverview() {
               { label: "In Progress", value: inProgressCount, tone: "text-amber-800" },
               { label: "Interviews", value: interviewCount, tone: "text-indigo-800" },
             ].map((stat) => (
-              <div key={stat.label} className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+              <button
+                key={stat.label}
+                type="button"
+                aria-pressed={
+                  (stat.label === "Applications Submitted" && selectedSection === "all") ||
+                  (stat.label === "In Progress" && selectedSection === "in-progress") ||
+                  (stat.label === "Interviews" && selectedSection === "interviews")
+                }
+                onClick={() => setSelectedSection(
+                  stat.label === "In Progress" ? "in-progress" : stat.label === "Interviews" ? "interviews" : "all",
+                )}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-4 text-left transition hover:border-indigo-300 hover:bg-indigo-50/30 aria-pressed:border-indigo-300 aria-pressed:ring-1 aria-pressed:ring-indigo-200"
+              >
                 <p className="text-sm text-slate-600">{stat.label}</p>
                 <p className={`mt-1 text-2xl font-semibold ${stat.tone}`}>{stat.value}</p>
-              </div>
+              </button>
             ))}
           </div>
 
           <div className="mt-7">
-            <h3 className="mb-2 text-base font-semibold text-slate-900">Recent Applications</h3>
-            {applications.length === 0 ? (
-              <p className="border-t border-slate-200 py-5 text-sm text-slate-600">Applications you track will appear here.</p>
+            <h3 className="mb-2 text-base font-semibold text-slate-900">{sectionTitle}</h3>
+            {visibleApplications.length === 0 ? (
+              <p className="border-t border-slate-200 py-5 text-sm text-slate-600">
+                {applications.length === 0
+                  ? "Applications you track will appear here."
+                  : selectedSection === "in-progress"
+                    ? "You have no applications currently in progress."
+                    : selectedSection === "interviews"
+                      ? "No interviews are recorded yet. Update an application status to Interview when you receive an invitation."
+                      : "You have no submitted applications yet."}
+              </p>
             ) : (
               <ul className="divide-y divide-slate-200 border-y border-slate-200">
-                {applications.slice(0, 6).map((application) => (
+                {visibleApplications.map((application) => (
                   <li key={application.id} className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
                     <div className="min-w-0">
                       <a href={application.url} target="_blank" rel="noreferrer" className="font-semibold text-slate-900 underline decoration-transparent underline-offset-2 transition hover:decoration-current">{application.title}</a>
                       <p className="mt-0.5 truncate text-sm text-slate-600">{application.company} · {application.location}</p>
                     </div>
-                    <time dateTime={application.applied_at} className="text-sm text-slate-500">{formatAppliedDate(application.applied_at)}</time>
+                    {selectedSection === "interviews" ? (
+                      <p className="text-sm text-slate-500">Interview date not provided</p>
+                    ) : (
+                      <time dateTime={application.applied_at} className="text-sm text-slate-500">{formatAppliedDate(application.applied_at)}</time>
+                    )}
                     <label className="flex items-center gap-2 text-sm">
                       <span className="sr-only">Status for {application.title}</span>
                       <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyles[application.status]}`}>{application.status}</span>

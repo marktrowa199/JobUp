@@ -28,7 +28,6 @@ class UserResponse(BaseModel):
     id: int
     full_name: str
     email: EmailStr
-    status: str = "Job Seeker"
 
 
 class AuthMessage(BaseModel):

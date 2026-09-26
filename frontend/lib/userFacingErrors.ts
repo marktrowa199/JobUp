@@ -26,6 +26,7 @@ export const userFacingErrors = {
   RATE_LIMITED: "Too many requests. Please wait a moment and try again.",
   RESUME_ANALYSIS_UNAVAILABLE: "We couldn't generate recommendations right now. Please try uploading your resume again later.",
   APPLICATIONS_UNAVAILABLE: "Your applications couldn't be loaded right now. Please try again.",
+  APPLICATION_TRACK_FAILED: "We couldn't save this application. Please try again.",
   APPLICATION_NOT_FOUND: "This application is no longer available.",
   INVALID_APPLICATION: "We couldn't save that application. Please try again.",
 } as const;
