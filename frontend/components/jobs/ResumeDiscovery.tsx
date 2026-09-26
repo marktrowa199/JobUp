@@ -10,7 +10,7 @@ import {
 } from "@/lib/resumeDiscovery";
 import { searchJobsApi } from "@/services/jobApi";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
-import { userFacingErrorMessage } from "@/lib/userFacingErrors";
+import { UserFacingError, userFacingErrorMessage } from "@/lib/userFacingErrors";
 import { ApplicationLink } from "@/components/jobs/ApplicationLink";
 
 function RecommendationCard({ match }: { match: ResumeJobMatch }) {
@@ -94,14 +94,24 @@ export function ResumeDiscovery() {
         if (ranked.length === 0) {
           setError({ title: "Recommendations", message: userFacingErrorMessage("NO_RESULTS") });
         }
-      } catch {
+      } catch (searchError) {
         if (cancelled) return;
+        if (process.env.NODE_ENV === "development") {
+          console.error("Resume job matching failed.", {
+            name: searchError instanceof Error ? searchError.name : "UnknownError",
+            message: searchError instanceof Error ? searchError.message.slice(0, 200) : "Unknown error",
+          });
+        }
         setMatches([]);
+        const message = searchError instanceof UserFacingError
+          ? searchError.message
+          : userFacingErrorMessage("RECOMMENDATIONS_UNAVAILABLE");
         setError({
           title: "Recommendations",
-          message: userFacingErrorMessage("RECOMMENDATIONS_UNAVAILABLE"),
+          message,
           retryable: true,
         });
+        notify("warning", message);
       } finally {
         if (!cancelled) setSearching(false);
       }
@@ -109,7 +119,7 @@ export function ResumeDiscovery() {
 
     void loadMatches();
     return () => { cancelled = true; };
-  }, [profile, searchAttempt]);
+  }, [profile, searchAttempt, notify]);
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

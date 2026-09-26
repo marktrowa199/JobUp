@@ -68,6 +68,9 @@ export async function proxyAuthRequest(
       signal: AbortSignal.timeout(15_000),
     });
     const payload: unknown = await backendResponse.json().catch(() => ({}));
+    if (!backendResponse.ok && endpoint === "logout") {
+      console.error("Backend logout failed.", { status: backendResponse.status });
+    }
     const responsePayload = backendResponse.ok
       ? payload
       : { message: messageFromPayload(payload) || "We couldn't complete that request. Please try again." };

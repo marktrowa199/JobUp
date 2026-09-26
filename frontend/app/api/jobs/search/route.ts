@@ -24,8 +24,12 @@ type SerpApiJob = {
 type SearchBody = { keywords?: unknown; location?: unknown; pageToken?: unknown };
 
 class SerpApiError extends Error {
-  constructor(readonly kind: "http" | "invalid-json" | "invalid-response", readonly status?: number) {
-    super(kind === "http" ? `SerpApi returned HTTP ${status}` : `SerpApi returned ${kind}`);
+  constructor(
+    readonly kind: "http" | "invalid-json" | "invalid-response",
+    readonly status?: number,
+    message?: string,
+  ) {
+    super(message || (kind === "http" ? `SerpApi returned HTTP ${status}` : `SerpApi returned ${kind}`));
   }
 }
 
@@ -90,7 +94,7 @@ async function fetchJobs(apiKey: string, keywords: string, location: string, pag
     serpapi_pagination?: { next_page_token?: string };
     error?: string;
   };
-  if (result.error) throw new SerpApiError("http");
+  if (result.error) throw new SerpApiError("http", response.status, result.error);
   if (!Array.isArray(result.jobs_results)) throw new SerpApiError("invalid-response");
   return {
     jobs: result.jobs_results as SerpApiJob[],

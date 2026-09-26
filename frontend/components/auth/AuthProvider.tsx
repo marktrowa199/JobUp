@@ -57,13 +57,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await fetch("/api/auth/logout", { method: "POST" });
       if (!response.ok) {
+        console.error("Logout API returned a failure status.", { status: response.status });
         notify("error", "Unable to log out. Please try again.");
         return false;
       }
       setUser(null);
-      notify("success", "You have been logged out.");
+      notify("success", "Logged out successfully.");
       return true;
-    } catch {
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("Logout request failed.", {
+          name: error instanceof Error ? error.name : "UnknownError",
+          message: error instanceof Error ? error.message.slice(0, 200) : "Unknown error",
+        });
+      }
       notify("error", "Unable to log out. Please try again.");
       return false;
     }

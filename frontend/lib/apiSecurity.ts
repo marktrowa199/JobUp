@@ -31,7 +31,30 @@ export function rateLimit(request: Request, scope: string, limit: number, window
 
 export function sameOriginRequired(request: Request): NextResponse | null {
   const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  if (!origin) return null;
+
+  const requestUrl = new URL(request.url);
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",", 1)[0]?.trim();
+  const host = forwardedHost || request.headers.get("host");
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",", 1)[0]?.trim();
+  const protocol = forwardedProto && /^(https?)$/i.test(forwardedProto)
+    ? `${forwardedProto.toLowerCase()}:`
+    : requestUrl.protocol;
+  let expectedOrigin = requestUrl.origin;
+  if (host) {
+    try {
+      expectedOrigin = new URL(`${protocol}//${host}`).origin;
+    } catch {
+      expectedOrigin = requestUrl.origin;
+    }
+  }
+
+  if (origin !== expectedOrigin) {
+    console.warn("Cross-origin API request rejected.", {
+      path: requestUrl.pathname,
+      origin,
+      expectedOrigin,
+    });
     return NextResponse.json({ code: "CSRF_REJECTED" }, { status: 403 });
   }
   return null;

@@ -75,7 +75,13 @@ export async function searchJobsApi(params: {
       }),
       cache: "no-store",
     });
-  } catch {
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("Job search request failed.", {
+        name: error instanceof Error ? error.name : "UnknownError",
+        message: error instanceof Error ? error.message.slice(0, 200) : "Unknown error",
+      });
+    }
     throw new UserFacingError("JOB_SEARCH_NETWORK_ERROR");
   }
 
