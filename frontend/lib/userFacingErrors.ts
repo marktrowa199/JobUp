@@ -22,6 +22,9 @@ export const userFacingErrors = {
   INVALID_RESUME_REQUEST: "Choose a PDF or DOCX resume to upload.",
   AUTH_REQUIRED: "Please sign in to analyze your resume.",
   RESUME_ANALYSIS_UNAVAILABLE: "We couldn't generate recommendations right now. Please try uploading your resume again later.",
+  APPLICATIONS_UNAVAILABLE: "Your applications couldn't be loaded right now. Please try again.",
+  APPLICATION_NOT_FOUND: "This application is no longer available.",
+  INVALID_APPLICATION: "We couldn't save that application. Please try again.",
 } as const;
 
 export type UserFacingErrorCode = keyof typeof userFacingErrors;

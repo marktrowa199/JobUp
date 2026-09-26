@@ -12,6 +12,7 @@ import {
 import { searchJobsApi } from "@/services/jobApi";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
 import { userFacingErrorMessage } from "@/lib/userFacingErrors";
+import { ApplicationLink } from "@/components/jobs/ApplicationLink";
 
 const RESUME_PROFILE_KEY = "jobup-resume-profile";
 const RESUME_PROFILE_EVENT = "jobup-resume-profile-change";
@@ -103,15 +104,12 @@ function RecommendationCard({ match }: { match: ResumeJobMatch }) {
             Apply
           </a>
         ) : (
-          <span className="shrink-0 rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-500">
-            Link unavailable
-          </span>
+          <ApplicationLink job={job} className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500" />
         )}
       </div>
     </article>
   );
 }
-
 export function ResumeDiscovery() {
   const { user } = useAuth();
   const profileKey = `${RESUME_PROFILE_KEY}:${user?.id ?? "anonymous"}`;
