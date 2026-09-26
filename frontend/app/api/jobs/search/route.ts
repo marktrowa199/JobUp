@@ -21,6 +21,15 @@ type SearchBody = {
   remote?: unknown;
 };
 
+class JoobleApiError extends Error {
+  constructor(
+    readonly kind: "http" | "invalid-json" | "invalid-response",
+    readonly status?: number,
+  ) {
+    super(kind === "http" ? `Jooble returned HTTP ${status}` : `Jooble returned ${kind}`);
+  }
+}
+
 const PHILIPPINE_LOCATIONS = [
   "Angeles City",
   "Quezon City",
@@ -114,17 +123,23 @@ async function fetchJoobleJobs(
   });
 
   if (!response.ok) {
-    throw new Error(`Jooble request failed with status ${response.status}`);
+    throw new JoobleApiError("http", response.status);
   }
 
-  const payload: unknown = await response.json();
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new JoobleApiError("invalid-json");
+  }
+
   const jobs =
     payload && typeof payload === "object" && Array.isArray((payload as { jobs?: unknown }).jobs)
       ? (payload as { jobs: JoobleJob[] }).jobs
       : null;
 
   if (!jobs) {
-    throw new Error("Unexpected Jooble response shape");
+    throw new JoobleApiError("invalid-response");
   }
 
   return jobs;
@@ -137,7 +152,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as SearchBody;
   } catch {
-    return NextResponse.json({ message: "Invalid search request." }, { status: 400 });
+    return NextResponse.json({ code: "INVALID_SEARCH_REQUEST" }, { status: 400 });
   }
 
   const requestedKeywords = text(body.keywords, "");
@@ -146,13 +161,13 @@ export async function POST(request: Request) {
   const remote = text(body.remote, "");
 
   if (!requestedKeywords) {
-    return NextResponse.json({ message: "Enter a job keyword to search." }, { status: 400 });
+    return NextResponse.json({ code: "MISSING_KEYWORD" }, { status: 400 });
   }
 
-  if (!apiKey) {
-    console.error("JOOBLE_API_KEY is missing. Add it to frontend/.env.local and restart Next.js.");
+  if (!apiKey || apiKey === "YOUR_API_KEY") {
+    console.error("JOOBLE API ERROR:", "Server-side search credentials are missing or invalid.");
     return NextResponse.json(
-      { message: "Live job search is temporarily unavailable. Please try again later." },
+      { code: "JOB_SEARCH_NOT_CONFIGURED" },
       { status: 503 },
     );
   }
@@ -187,16 +202,39 @@ export async function POST(request: Request) {
       locationBroadened,
     });
   } catch (error) {
-    console.error("Jooble request error", error);
-    if (error instanceof Error && error.message.includes("status 429")) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const safeErrorMessage = apiKey
+      ? errorMessage
+          .replaceAll(encodeURIComponent(apiKey), "[redacted]")
+          .replaceAll(apiKey, "[redacted]")
+      : errorMessage;
+    console.error("JOOBLE API ERROR:", {
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: safeErrorMessage,
+    });
+
+    if (error instanceof JoobleApiError) {
+      if (error.kind === "http") {
+        const status = error.status === 429 ? 429 : 502;
+        return NextResponse.json(
+          { code: `JOB_SEARCH_PROVIDER_${error.status ?? "ERROR"}` },
+          { status },
+        );
+      }
+
       return NextResponse.json(
-        { message: "The job search provider rate limit was reached. Please try again shortly." },
-        { status: 429 },
+        { code: error.kind === "invalid-json" ? "JOB_SEARCH_INVALID_JSON" : "JOB_SEARCH_INVALID_RESPONSE" },
+        { status: 502 },
       );
     }
+
+    const timedOut = error instanceof Error
+      && (error.name === "TimeoutError" || error.name === "AbortError");
     return NextResponse.json(
-      { message: "We couldn't connect to the job search provider." },
-      { status: 502 },
+      {
+        code: timedOut ? "JOB_SEARCH_TIMEOUT" : "JOB_SEARCH_NETWORK_ERROR",
+      },
+      { status: timedOut ? 504 : 503 },
     );
   }
 }

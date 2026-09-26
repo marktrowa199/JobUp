@@ -11,7 +11,7 @@ const BACKEND_API_URL = process.env.BACKEND_API_URL?.trim() || "http://127.0.0.1
 export async function POST(request: Request) {
   const cookie = request.headers.get("cookie");
   if (!cookie) {
-    return NextResponse.json({ message: "Log in to analyze your resume." }, { status: 401 });
+    return NextResponse.json({ code: "AUTH_REQUIRED" }, { status: 401 });
   }
 
   try {
@@ -21,30 +21,31 @@ export async function POST(request: Request) {
       signal: AbortSignal.timeout(10_000),
     });
     if (!sessionResponse.ok) {
-      return NextResponse.json({ message: "Log in to analyze your resume." }, { status: 401 });
+      return NextResponse.json({ code: "AUTH_REQUIRED" }, { status: 401 });
     }
-  } catch {
-    return NextResponse.json({ message: "JobUp is temporarily unavailable. Please try again." }, { status: 503 });
+  } catch (error) {
+    console.error("Resume authentication check failed:", error);
+    return NextResponse.json({ code: "RESUME_ANALYSIS_UNAVAILABLE" }, { status: 503 });
   }
 
   let form: FormData;
   try {
     form = await request.formData();
   } catch {
-    return NextResponse.json({ message: "Choose a PDF or TXT resume to upload." }, { status: 400 });
+    return NextResponse.json({ code: "INVALID_RESUME_REQUEST" }, { status: 400 });
   }
 
   const file = form.get("resume");
   if (!(file instanceof File)) {
-    return NextResponse.json({ message: "Choose a PDF or TXT resume to upload." }, { status: 400 });
+    return NextResponse.json({ code: "INVALID_RESUME_REQUEST" }, { status: 400 });
   }
   if (file.size > MAX_RESUME_BYTES) {
-    return NextResponse.json({ code: "FILE_TOO_LARGE", message: "Resume files must be 8 MB or smaller." }, { status: 413 });
+    return NextResponse.json({ code: "FILE_TOO_LARGE" }, { status: 413 });
   }
 
   const extension = file.name.toLowerCase().split(".").pop();
   if (extension !== "pdf" && extension !== "docx" && extension !== "txt") {
-    return NextResponse.json({ code: "UNSUPPORTED_FILE_TYPE", message: "Upload a PDF, DOCX, or TXT resume. Legacy DOC files are not supported." }, { status: 415 });
+    return NextResponse.json({ code: "UNSUPPORTED_FILE_TYPE" }, { status: 415 });
   }
 
   try {
@@ -68,17 +69,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ profile });
   } catch (error) {
     if (error instanceof InvalidResumeError) {
-      return NextResponse.json({
-        code: "INVALID_RESUME",
-        message: "We couldn't detect a valid resume in this file. Please upload a resume or CV to use Resume-Powered Discovery.",
-      }, { status: 422 });
+      console.warn("Resume could not be read:", error.message);
+      return NextResponse.json({ code: "INVALID_RESUME" }, { status: 422 });
     }
-    return NextResponse.json(
-      {
-        code: "INVALID_RESUME",
-        message: "We couldn't detect a valid resume in this file. Please upload a resume or CV to use Resume-Powered Discovery.",
-      },
-      { status: 422 },
-    );
+    console.error("Resume analysis failed:", error);
+    return NextResponse.json({ code: "RESUME_ANALYSIS_UNAVAILABLE" }, { status: 500 });
   }
 }

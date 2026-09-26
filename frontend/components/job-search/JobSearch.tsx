@@ -16,6 +16,7 @@ import { RecentSearches } from "@/components/jobs/RecentSearches";
 import { ResumeDiscovery } from "@/components/jobs/ResumeDiscovery";
 import { searchJobsApi } from "@/services/jobApi";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
+import { UserFacingError, userFacingErrorMessage } from "@/lib/userFacingErrors";
 
 type JobSearchProps = {
   onSearch?: (jobs: Job[]) => void;
@@ -32,6 +33,7 @@ export function JobSearch({ onSearch }: JobSearchProps) {
   const [results, setResults] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [retryAction, setRetryAction] = useState<(() => void) | null>(null);
   const { notify } = useNotifications();
   const locationRef = useRef<HTMLDivElement | null>(null);
   const recentSearchesLoaded = useRef(false);
@@ -86,6 +88,7 @@ export function JobSearch({ onSearch }: JobSearchProps) {
   const handleSearch = async () => {
     setLoading(true);
     setError("");
+    setRetryAction(null);
     notify("info", "Searching for jobs...");
 
     try {
@@ -109,12 +112,19 @@ export function JobSearch({ onSearch }: JobSearchProps) {
       if (response.locationBroadened) {
         setError(`No jobs were found in the requested city, so we broadened this search to the Philippines. Showing ${nextResults.length} result${nextResults.length === 1 ? "" : "s"}.`);
       } else if (nextResults.length === 0) {
-        setError("No jobs found in the Philippines. Try another job title, keyword, or location.");
+        const message = userFacingErrorMessage("NO_RESULTS");
+        setError(message);
+        notify("warning", message);
+        return;
       }
       notify("success", `${nextResults.length} job${nextResults.length === 1 ? "" : "s"} found.`);
     } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : "We couldn't load job listings right now.");
-      notify("error", "Something went wrong. Please try again.");
+      const message = searchError instanceof UserFacingError
+        ? searchError.message
+        : userFacingErrorMessage("JOB_SEARCH_UNAVAILABLE");
+      setError(message);
+      setRetryAction(() => () => { void handleSearch(); });
+      notify("warning", message);
     } finally {
       setLoading(false);
     }
@@ -136,6 +146,7 @@ export function JobSearch({ onSearch }: JobSearchProps) {
 
     setLoading(true);
     setError("");
+    setRetryAction(null);
     notify("info", "Searching for jobs...");
 
     try {
@@ -149,12 +160,19 @@ export function JobSearch({ onSearch }: JobSearchProps) {
       if (response.locationBroadened) {
         setError(`No jobs were found in ${recent.location}, so we broadened this search to the Philippines.`);
       } else if (response.jobs.length === 0) {
-        setError(`No jobs found for "${recent.job}" in "${recent.location}".`);
+        const message = userFacingErrorMessage("NO_RESULTS");
+        setError(message);
+        notify("warning", message);
+        return;
       }
       notify("success", `${response.jobs.length} job${response.jobs.length === 1 ? "" : "s"} found.`);
     } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : "We couldn't load job listings right now.");
-      notify("error", "Something went wrong. Please try again.");
+      const message = searchError instanceof UserFacingError
+        ? searchError.message
+        : userFacingErrorMessage("JOB_SEARCH_UNAVAILABLE");
+      setError(message);
+      setRetryAction(() => () => { void handleQuickSearch(recent); });
+      notify("warning", message);
     } finally {
       setLoading(false);
     }
@@ -218,6 +236,7 @@ export function JobSearch({ onSearch }: JobSearchProps) {
             disabled={loading}
             className="rounded-2xl bg-indigo-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-indigo-300"
           >
+            {loading && <span aria-hidden="true" className="mr-2 inline-block size-4 animate-spin rounded-full border-2 border-white/40 border-t-white align-[-3px]" />}
             {loading ? "Searching..." : "Search Jobs"}
           </button>
         </div>
@@ -228,8 +247,21 @@ export function JobSearch({ onSearch }: JobSearchProps) {
         />
 
         {error && (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            {error}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="alert">
+            <p className="flex items-center gap-2">
+              <span aria-hidden="true" className="flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-200 font-bold">!</span>
+              {error}
+            </p>
+            {retryAction && (
+              <button
+                type="button"
+                onClick={() => retryAction()}
+                disabled={loading}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
+              >
+                {loading ? "Trying again..." : "Try again"}
+              </button>
+            )}
           </div>
         )}
       </div>

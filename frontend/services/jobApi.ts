@@ -1,3 +1,9 @@
+import {
+  UserFacingError,
+  userFacingErrorMessage,
+  userFacingErrors,
+} from "@/lib/userFacingErrors";
+
 export type JobSearchFilters = {
   pay: string;
   jobType: string;
@@ -54,29 +60,44 @@ export async function searchJobsApi(params: {
   jobType?: string;
   remote?: string;
 }): Promise<JobSearchResponse> {
-  const response = await fetch("/api/jobs/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      keywords: params.keyword,
-      location: params.location,
-      jobType: params.jobType,
-      remote: params.remote,
-    }),
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(payload?.message ?? "We couldn't load job listings right now.");
+  let response: Response;
+  try {
+    response = await fetch("/api/jobs/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        keywords: params.keyword,
+        location: params.location,
+        jobType: params.jobType,
+        remote: params.remote,
+      }),
+      cache: "no-store",
+    });
+  } catch {
+    throw new UserFacingError("JOB_SEARCH_NETWORK_ERROR");
   }
 
-  const payload = (await response.json()) as {
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { code?: unknown } | null;
+    const code = payload?.code;
+    if (typeof code === "string" && Object.prototype.hasOwnProperty.call(userFacingErrors, code)) {
+      throw new UserFacingError(code as ConstructorParameters<typeof UserFacingError>[0]);
+    }
+    throw new Error(userFacingErrorMessage(code));
+  }
+
+  let payload: {
     jobs: JobApiItem[];
     keyword?: string;
     location?: string;
     locationBroadened?: boolean;
   };
+  try {
+    payload = await response.json();
+    if (!Array.isArray(payload.jobs)) throw new Error("Invalid search response");
+  } catch {
+    throw new UserFacingError("JOB_SEARCH_INVALID_RESPONSE");
+  }
   return {
     keyword: payload.keyword ?? params.keyword,
     location: payload.location ?? params.location ?? "Philippines",

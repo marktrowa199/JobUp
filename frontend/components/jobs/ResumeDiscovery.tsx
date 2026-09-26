@@ -11,6 +11,7 @@ import {
 } from "@/lib/resumeDiscovery";
 import { searchJobsApi } from "@/services/jobApi";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
+import { userFacingErrorMessage } from "@/lib/userFacingErrors";
 
 const RESUME_PROFILE_KEY = "jobup-resume-profile";
 const RESUME_PROFILE_EVENT = "jobup-resume-profile-change";
@@ -128,7 +129,7 @@ export function ResumeDiscovery() {
   const [matches, setMatches] = useState<ResumeJobMatch[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [error, setError] = useState<{ title: string; message: string } | null>(null);
+  const [error, setError] = useState<{ title: string; message: string; retryable?: boolean } | null>(null);
   const [searchAttempt, setSearchAttempt] = useState(0);
   const { notify } = useNotifications();
 
@@ -149,13 +150,11 @@ export function ResumeDiscovery() {
 
       const responses = results.filter((result) => result.status === "fulfilled");
       if (responses.length === 0) {
-        const firstFailure = results.find((result) => result.status === "rejected");
         setMatches([]);
         setError({
-          title: "Recommendations unavailable",
-          message: firstFailure?.status === "rejected" && firstFailure.reason instanceof Error
-            ? firstFailure.reason.message
-            : "Job recommendations are temporarily unavailable. Please try again.",
+          title: "Recommendations",
+          message: userFacingErrorMessage("RECOMMENDATIONS_UNAVAILABLE"),
+          retryable: true,
         });
         setSearching(false);
         return;
@@ -178,8 +177,8 @@ export function ResumeDiscovery() {
       setMatches(ranked);
       if (responses.length < results.length) {
         setError({
-          title: "Some role searches failed",
-          message: "These recommendations include the results that were available.",
+          title: "Recommendations",
+          message: userFacingErrorMessage("RECOMMENDATIONS_PARTIAL"),
         });
       }
       setSearching(false);
@@ -201,9 +200,9 @@ export function ResumeDiscovery() {
       return;
     }
     if (!/\.(pdf|docx|txt)$/i.test(file.name)) {
-      const message = "Upload a PDF, DOCX, or TXT resume. Legacy DOC files are not supported.";
-      setError({ title: "Unsupported file type", message });
-      notify("error", message);
+      const message = userFacingErrorMessage("UNSUPPORTED_FILE_TYPE");
+      setError({ title: "Resume couldn't be read", message });
+      notify("warning", message);
       return;
     }
 
@@ -218,23 +217,20 @@ export function ResumeDiscovery() {
 
     try {
       const response = await fetch("/api/resume/analyze", { method: "POST", body: form, cache: "no-store" });
-      const payload = await response.json() as { profile?: ResumeProfile; message?: string; code?: string };
+      const payload = await response.json() as { profile?: ResumeProfile; code?: string };
       if (!response.ok || !payload.profile) {
-        if (payload.code === "INVALID_RESUME") {
-          const message = "We couldn't detect a valid resume in this file. Please upload a resume or CV to use Resume-Powered Discovery.";
-          setError({ title: "Invalid Resume", message });
-          notify("error", `Invalid Resume. ${message}`);
-          return;
-        }
-        throw new Error(payload.message ?? "We couldn't analyze this resume.");
+        const message = userFacingErrorMessage(payload.code, "RESUME_ANALYSIS_UNAVAILABLE");
+        setError({ title: "Resume upload", message });
+        notify("warning", message);
+        return;
       }
       window.localStorage.setItem(profileKey, JSON.stringify(payload.profile));
       window.dispatchEvent(new Event(RESUME_PROFILE_EVENT));
       notify("success", "Resume analyzed. Finding matching jobs across the Philippines.");
-    } catch (uploadError) {
-      const message = uploadError instanceof Error ? uploadError.message : "We couldn't analyze this resume.";
-      setError({ title: "Upload failed", message });
-      notify("error", message);
+    } catch {
+      const message = userFacingErrorMessage("RESUME_ANALYSIS_UNAVAILABLE");
+      setError({ title: "Resume upload", message });
+      notify("warning", message);
     } finally {
       setAnalyzing(false);
     }
@@ -343,6 +339,7 @@ export function ResumeDiscovery() {
 
             {searching ? (
               <div className="border-t border-slate-100 py-8 text-center text-sm text-slate-600" role="status">
+                <span aria-hidden="true" className="mr-2 inline-block size-4 animate-spin rounded-full border-2 border-emerald-700/20 border-t-emerald-700 align-[-3px]" />
                 Searching live Philippine listings for matching and related roles...
               </div>
             ) : matches.length > 0 ? (
@@ -352,7 +349,7 @@ export function ResumeDiscovery() {
             ) : (
               !error && (
                 <div className="border-t border-slate-100 py-8 text-center text-sm text-slate-600">
-                  No matching jobs were found right now. Try refreshing or use Job Search below for another title.
+                  {userFacingErrorMessage("NO_RESULTS")}
                 </div>
               )
             )}
@@ -360,9 +357,21 @@ export function ResumeDiscovery() {
         )}
 
         {error && (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role={error.title === "Invalid Resume" ? "alert" : "status"}>
-            <p className="font-semibold">{error.title}</p>
-            <p className="mt-1">{error.message}</p>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="alert">
+            <p className="flex items-center gap-2">
+              <span aria-hidden="true" className="flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-200 font-bold">!</span>
+              <span><span className="font-semibold">{error.title}</span><span className="mt-1 block">{error.message}</span></span>
+            </p>
+            {error.retryable && (
+              <button
+                type="button"
+                onClick={() => setSearchAttempt((attempt) => attempt + 1)}
+                disabled={searching}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
+              >
+                {searching ? "Trying again..." : "Try again"}
+              </button>
+            )}
           </div>
         )}
       </div>
