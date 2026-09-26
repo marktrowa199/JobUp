@@ -119,7 +119,7 @@ export function JobSearchPanel() {
                 <p className="mt-2 text-sm text-slate-700">{job.pay}</p>
                 <p className="mt-1 text-sm text-slate-600">{[job.type, job.remote === "Not specified" ? "" : job.remote].filter(Boolean).join(" · ")}</p>
                 <p className="mt-1 text-xs text-slate-500">{job.listingTime}</p>
-                <div className="mt-3">{job.url && <ApplicationLink job={job} className="inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700" />}</div>
+                <div className="mt-3"><ApplicationLink job={job} className="inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700" /></div>
               </article>
             ))}
             {visibleJobs.length === 0 && <p className="py-5 text-sm text-slate-600">No {jobType.toLowerCase()} jobs on this page. Try another page or choose Any job type.</p>}

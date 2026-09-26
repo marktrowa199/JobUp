@@ -14,8 +14,10 @@ export type JobSearchFilters = {
 
 export type JobApiItem = {
   id: string;
+  applicationId?: string;
   title: string;
   company: string;
+  companyWebsite?: string;
   location: string;
   description?: string;
   salary?: string;

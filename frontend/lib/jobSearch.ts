@@ -8,8 +8,10 @@ export type JobSearchFilters = {
 
 export type Job = {
   id: string;
+  applicationId?: string;
   title: string;
   company: string;
+  companyWebsite: string;
   location: string;
   type: string;
   remote: string;
@@ -60,8 +62,10 @@ export const defaultFilters: JobSearchFilters = {
 
 export function normalizeJobFromApi(item: {
   id?: string;
+  applicationId?: string;
   title?: string;
   company?: string;
+  companyWebsite?: string;
   location?: string;
   description?: string;
   salary?: string;
@@ -75,8 +79,10 @@ export function normalizeJobFromApi(item: {
 }): Job {
   return {
     id: item.id ?? crypto.randomUUID(),
+    applicationId: item.applicationId,
     title: item.title ?? "Not specified",
     company: item.company ?? "Not specified",
+    companyWebsite: item.companyWebsite ?? "",
     location: item.location ?? "Not specified",
     type: item.jobType ?? item.job_type ?? "Not specified",
     remote: item.remote ?? "Not specified",

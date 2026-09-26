@@ -46,6 +46,9 @@ export async function proxyApplicationRequest(request: Request, path = "") {
       return NextResponse.json({ code }, { status: backendResponse.status });
     }
 
+    if (backendResponse.status === 204) {
+      return new NextResponse(null, { status: 204, headers: { "Cache-Control": "no-store" } });
+    }
     return NextResponse.json(payload, { status: backendResponse.status, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Applications API proxy failed.", { name: error instanceof Error ? error.name : "UnknownError" });

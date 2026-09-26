@@ -41,18 +41,7 @@ function RecommendationCard({ match }: { match: ResumeJobMatch }) {
       )}
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
         <span className="truncate text-xs text-slate-500">{job.source}</span>
-        {job.url ? (
-          <a
-            href={job.url}
-            target="_blank"
-            rel="noreferrer"
-            className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-          >
-            Apply
-          </a>
-        ) : (
-          <ApplicationLink job={job} className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500" />
-        )}
+        <ApplicationLink job={job} className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500" />
       </div>
     </article>
   );

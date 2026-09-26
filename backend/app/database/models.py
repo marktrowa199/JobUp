@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.database import Base
@@ -45,7 +45,13 @@ class JobApplication(Base):
     company: Mapped[str] = mapped_column(String(250), nullable=False)
     location: Mapped[str] = mapped_column(String(250), nullable=False)
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
-    status: Mapped[str] = mapped_column(String(30), nullable=False, default="Submitted")
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="Applications Submitted")
+    next_action: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    salary: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    company_website: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    contact_person: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    contact_information: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     applied_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

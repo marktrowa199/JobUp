@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { rateLimit } from "@/lib/apiSecurity";
 
 export const runtime = "nodejs";
@@ -7,6 +8,8 @@ type SerpApiJob = {
   job_id?: string;
   title?: string;
   company_name?: string;
+  company_url?: string;
+  company_website?: string;
   location?: string;
   description?: string;
   via?: string;
@@ -53,10 +56,19 @@ function normalizeJob(job: SerpApiJob, index: number) {
   const remote = details.work_from_home || /remote|work from home|home-based/i.test(`${job.title ?? ""} ${description}`)
     ? "Remote"
     : "Not specified";
+  const id = text(job.job_id, text(job.share_link, `serpapi-ph-${index}`));
+  // Google Jobs IDs can contain an encoded provider payload much longer than
+  // the application database's 512 character job_id limit. Keep the original
+  // ID for job details, but use a stable compact key for application tracking.
+  const applicationId = id.length > 512
+    ? `serpapi:${createHash("sha256").update(id).digest("hex")}`
+    : id;
   return {
-    id: text(job.job_id, text(job.share_link, `serpapi-ph-${index}`)),
+    id,
+    applicationId,
     title: text(job.title, "Not specified"),
     company: text(job.company_name, "Not specified"),
+    companyWebsite: text(job.company_website, text(job.company_url, "")),
     location: text(job.location, "Philippines"),
     description,
     salary: text(details.salary, "Salary not specified"),
